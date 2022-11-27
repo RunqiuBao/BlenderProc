@@ -14,6 +14,7 @@ def set_world_background_hdr_img(path_to_hdr_file):
     Sets the world background to the given hdr_file.
 
     :param path_to_hdr_file: Path to the .hdr file
+           rotation: apply rotation to the background hdr. [Rx, Ry, Rz] angle in degree.
     """
 
     if not os.path.exists(path_to_hdr_file):

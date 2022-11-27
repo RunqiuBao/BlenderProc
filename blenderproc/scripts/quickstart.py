@@ -1,3 +1,5 @@
+import blenderproc as bproc
+
 """
 The quickstart example:
 
@@ -8,14 +10,13 @@ The quickstart example:
 5. The rendered image is saved in an .hdf5 file container
 
 """
-import blenderproc as bproc
-
 import numpy as np
+import cv2
 
 bproc.init()
 
 # Create a simple object:
-obj = bproc.object.create_primitive("MONKEY")
+obj = bproc.object.create_primitive("CONE")
 
 # Create a point light next to it
 light = bproc.types.Light()
@@ -27,7 +28,9 @@ cam_pose = bproc.math.build_transformation_mat([0, -5, 0], [np.pi / 2, 0, 0])
 bproc.camera.add_camera_pose(cam_pose)
 
 # Render the scene
+bproc.renderer.set_output_format(enable_transparency=True)
 data = bproc.renderer.render()
 
 # Write the rendering into a hdf5 file
 bproc.writer.write_hdf5("output/", data)
+cv2.imwrite('output/template.png', data['colors'][0])
