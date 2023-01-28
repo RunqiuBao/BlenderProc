@@ -51,6 +51,15 @@ for ii in range(6):
     camTranslation[0] += ii * 0.05
     cam_pose = bproc.math.build_transformation_mat(camTranslation, camRotationBase)
     bproc.camera.add_camera_pose(cam_pose)
+# bproc.camera.set_resolution(image_width=1280, image_height=720)
+kk = np.array([
+    [1.77777818e+03 / 2, 0.00000000e+00, 6.39500000e+02],
+    [0.00000000e+00, 1.77777818e+03 / 2, 3.59500000e+02],
+    [0.00000000e+00, 0.00000000e+00, 1.00000000e+00]    
+])
+bproc.camera.set_intrinsics_from_K_matrix(K = kk, image_width = 1280, image_height = 720)
+
+# Note: auto adjusting KK
 
 # Render the scene
 data = bproc.renderer.render()
