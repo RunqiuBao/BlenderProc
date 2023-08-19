@@ -59,7 +59,7 @@ if __name__ == "__main__":
     bproc.init()
 
     # Create a simple object:
-    scenePath = '/home/runqiu/site.blend'
+    scenePath = '/home/runqiu/site2.blend'
     bkgPath = '/mnt/data/blenderMaterials/hdri/moonless_golf_4k.jpg'
     obj = bproc.loader.load_blend(scenePath)
     # bproc.object.delete_multiple(obj[-4:])  # delete those baloons
