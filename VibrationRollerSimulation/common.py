@@ -46,10 +46,10 @@ class StereoCamera(Camera):
     def __init__(self, name, imageWidth, imageHeight, kk, baseline):
         super(StereoCamera, self).__init__(name, 'stereo', kk, imageWidth, imageHeight)
         self._rightCameraInLeftCameraTransform = numpy.eye(4)
-        self._rightCameraInLeftCameraTransform[1, 3] = -baseline
+        self._rightCameraInLeftCameraTransform[0, 3] = baseline
 
     def GetRightCameraInWorldTransform(self, leftCameraInWorldTransform):
-        return numpy.matmul(self._rightCameraInLeftCameraTransform, leftCameraInWorldTransform)
+        return numpy.matmul(leftCameraInWorldTransform, self._rightCameraInLeftCameraTransform)
 
 
 class CacheManager(object):
