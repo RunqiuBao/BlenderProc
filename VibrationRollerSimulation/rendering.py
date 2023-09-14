@@ -65,6 +65,30 @@ if __name__ == "__main__":
     # bproc.object.delete_multiple(obj[-4:])  # delete those baloons
     bproc.world.set_world_background_hdr_img(bkgPath)
 
+    isOnlyGeneratePose = True
+    if isOnlyGeneratePose:
+        with open("/home/runqiu/tmptmp/test-dataset/ts.txt", "r") as file:
+            tsList = file.readlines()
+        ts = []
+        for line in tsList:
+            if line[-1] == '\n':
+                ts.append(float(line[:-1]))
+            else:
+                ts.append(float(line))
+        cameraPoseList = myPathPlanner.InitializeRollerPath(
+            8, 4, 0,
+            camTranslation=None,
+            camRotation=None,
+            laneWidth=2.0,
+            moveStep=0.1,
+            ts=ts,
+            timeAnchorsIndicies=numpy.array([
+                [0, 154],
+                [158, 629],
+                [631, 787]
+            ])
+        )
+
     # Set the camera to be in front of the object
     cameraPoseBase = numpy.array([
         [-0.07231751829385757, 0.24019721150398254, -0.9680265784263611, -9.255331993103027],
@@ -107,12 +131,13 @@ if __name__ == "__main__":
     # Render the data
     os.makedirs('output/seq/leftCam', exist_ok=True)
     os.makedirs('output/seq/rightCam', exist_ok=True)
-    outputPosePath = 'output/seq/pose.txt'
+    outputPosePath = '/home/runqiu/tmptmp/test-dataset/gtpose.txt'
     for indexCamPose, camInWorldTransform in enumerate(camInWorldTransformList):
         print('indexCamPose: {}, new frame pos: {}'.format(indexCamPose, camInWorldTransform[:3, 3]))
-        leftImage, rightImage = myStereoCam.RenderOnePose(camInWorldTransform, bproc.renderer)
-        cv2.imwrite('output/seq/leftCam/{}.png'.format(str(indexCamPose).zfill(6)), cv2.cvtColor(leftImage, cv2.COLOR_RGB2BGR))
-        cv2.imwrite('output/seq/rightCam/{}.png'.format(str(indexCamPose).zfill(6)), cv2.cvtColor(rightImage, cv2.COLOR_RGB2BGR))
+        if not isOnlyGeneratePose:
+            leftImage, rightImage = myStereoCam.RenderOnePose(camInWorldTransform, bproc.renderer)
+            cv2.imwrite('output/seq/leftCam/{}.png'.format(str(indexCamPose).zfill(6)), cv2.cvtColor(leftImage, cv2.COLOR_RGB2BGR))
+            cv2.imwrite('output/seq/rightCam/{}.png'.format(str(indexCamPose).zfill(6)), cv2.cvtColor(rightImage, cv2.COLOR_RGB2BGR))
         rRotation = R.from_matrix(camInWorldTransform[:3, :3])
         qRotation = rRotation.as_quat()
         onePose = str(indexCamPose) + ' ' + ' '.join(map(str, camInWorldTransform[:3, 3])) + ' ' + ' '.join(map(str, qRotation))

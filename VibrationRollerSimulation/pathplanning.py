@@ -39,7 +39,29 @@ class VibrationRollerPathPlanner(object):
         """
         self._poseList = self.InitializeRollerPath(squareWidth, squareHeight, squareTheta, camTranslation, camRotation, laneWidth, moveStep)
 
-    def InitializeRollerPath(self, squareWidth, squareHeight, squareTheta, camTranslation, camRotation, laneWidth, moveStep):
+    def InitializeRollerPath(
+            self,
+            squareWidth,
+            squareHeight,
+            squareTheta,
+            camTranslation,
+            camRotation,
+            laneWidth,
+            moveStep,
+            ts=None,
+            timeAnchorsIndicies=None
+        ):
+        """
+        New mode: if ts provided, generate path of one cycle according to the timestamps.
+        timeAnchors including 3 pair, 6 time points in one cycle. 4x2 shape.
+        *         *
+        ||        |
+        |  |      |
+        |     |   |
+        |       | |
+        |        ||
+        |         *
+        """
         numLane = math.ceil(squareWidth / laneWidth)
         poseList = []
         numStepForward = math.ceil(squareHeight / moveStep)
@@ -50,14 +72,65 @@ class VibrationRollerPathPlanner(object):
         numStepsBack = int(squareHeight / moveStep) * 3  # Note: backward need to be slow. Because it contains rotation.
         numStepsBack = numStepsBack if numStepsBack % 2 == 0 else (numStepsBack + 1)
         startPose = numpy.eye(4)
+        startPose[:3, :3] = numpy.array([
+            [numpy.cos(squareTheta), -numpy.sin(squareTheta), 0],
+            [numpy.sin(squareTheta), numpy.cos(squareTheta), 0],
+            [0, 0, 1]
+        ])
         poseList.append(startPose)
-        # generate backward move vectors if cache does not exist.
-        backwardVectorCacheFile = os.path.join('/tmp', 'blenderProc-runqiu', 'backwardSmooth.json')
-        os.makedirs('/tmp/blenderProc-runqiu/', exist_ok=True)
-        if os.path.exists(backwardVectorCacheFile):
-            backwardDirsList = CacheManager.LoadCache(backwardVectorCacheFile)['backwardDirsList']
-            backwardLocationsList = CacheManager.LoadCache(backwardVectorCacheFile)['backwardLocationsList']
-        else:    
+
+        if ts is not None:
+            # first lane
+            timeSpan = ts[timeAnchorsIndicies[0, 1]] - ts[timeAnchorsIndicies[0, 0]]
+            startPose = poseList[-1]
+            for indexT in range(timeAnchorsIndicies[0, 0] + 1, timeAnchorsIndicies[0, 1] + 1):
+                newPose = copy.deepcopy(startPose)
+                newPose[:3, 3] += dirForward * squareHeight * (ts[indexT] - ts[timeAnchorsIndicies[0, 0]]) / timeSpan
+                poseList.append(newPose)
+            # add static poses
+            if timeAnchorsIndicies[1, 0] > timeAnchorsIndicies[0, 1]:
+                staticPose = copy.deepcopy(poseList[-1])
+                for time in range(timeAnchorsIndicies[1, 0] - timeAnchorsIndicies[0, 1] - 1):
+                    poseList.append(staticPose)
+            # second (backward)
+            firstFunc = [-0.25, 2, -4]
+            dFirstFunc = [-0.5, 2]
+            secondFunc = [0.25, 0, -2]
+            dSecondFunc = [0.5, 0]
+            timeSpan = ts[timeAnchorsIndicies[1, 1]] - ts[timeAnchorsIndicies[1, 0]]
+            startPose = poseList[-1]
+            orientationForward = copy.deepcopy(startPose[:3, :3])
+            for indexT in range(timeAnchorsIndicies[1, 0], timeAnchorsIndicies[1, 1] + 1):
+                x0 = squareHeight - squareHeight * (ts[indexT] - ts[timeAnchorsIndicies[1, 0]]) / timeSpan
+                if ts[indexT] <= (ts[timeAnchorsIndicies[1, 0]] + timeSpan / 2):
+                    y0 = firstFunc[0] * x0**2 + firstFunc[1] * (x0) + firstFunc[2]
+                    k = dFirstFunc[0] * x0 + dFirstFunc[1]
+                else:
+                    y0 = secondFunc[0] * x0**2 + secondFunc[1] * (x0) + secondFunc[2]
+                    k = dSecondFunc[0] * x0 + dSecondFunc[1]
+                backwardLocation = numpy.array([x0, y0, 0])
+                backwardDir = numpy.array([numpy.cos(numpy.arctan(k)), numpy.sin(numpy.arctan(k)), 0])
+                backwardDir = backwardDir / numpy.linalg.norm(backwardDir)
+                newPose = numpy.eye(4)
+                newPose[:3, 3] = numpy.matmul(rotationMatrixHorizontal, backwardLocation)
+                newPose[1:3, 3] += startPose[1:3, 3]  # Note: if the lane is biased from 0, need to add the starting value of y.
+                newPose[:3, :3] = numpy.matmul(GetRotationMatrixFromTwoVectors(numpy.array([1, 0, 0]), backwardDir), orientationForward)
+                poseList.append(newPose)
+            # add static poses
+            if timeAnchorsIndicies[2, 0] > timeAnchorsIndicies[1, 1]:
+                staticPose = copy.deepcopy(poseList[-1])
+                for time in range(timeAnchorsIndicies[2, 0] - timeAnchorsIndicies[1, 1] - 1):
+                    poseList.append(staticPose)
+            # third lane
+            timeSpan = ts[timeAnchorsIndicies[2, 1]] - ts[timeAnchorsIndicies[2, 0]]
+            startPose = poseList[-1]
+            for indexT in range(timeAnchorsIndicies[2, 0], timeAnchorsIndicies[2, 1] + 1):
+                newPose = copy.deepcopy(startPose)
+                newPose[:3, 3] += dirForward * squareHeight * (ts[indexT] - ts[timeAnchorsIndicies[2, 0]]) / timeSpan
+                newPose[:3, :3] = orientationForward
+                poseList.append(newPose)
+        else:
+            # generate backward move dirs
             backwardDirsList = []
             backwardLocationsList = []
             firstFunc = [-0.25, 2, -4]
@@ -79,25 +152,25 @@ class VibrationRollerPathPlanner(object):
                     k = dSecondFunc[0] * x0 + dSecondFunc[1]
                     backwardDir = numpy.array([numpy.cos(numpy.arctan(k)), numpy.sin(numpy.arctan(k)), 0])
                     backwardDirsList.append(backwardDir / numpy.linalg.norm(backwardDir))
-            CacheManager.DumpCache({'backwardDirsList': backwardDirsList, 'backwardLocationsList': backwardLocationsList}, backwardVectorCacheFile)
-        for indexLane in range(numLane):
-            for indexStepForward in range(numStepForward):
+
+            for indexLane in range(numLane):
+                for indexStepForward in range(numStepForward):
+                    newPose = copy.deepcopy(poseList[-1])
+                    newPose[:3, :3] = poseList[-1][:3, :3]
+                    newPose[:3, 3] += dirForward * moveStep
+                    poseList.append(newPose)
+                orientationForward = copy.copy(poseList[-1][:3, :3])
+                # backward
+                backStartPose = copy.deepcopy(poseList[-1])
+                for indexBackward in range(numStepsBack + 1):
+                    newPose = copy.deepcopy(backStartPose)
+                    newPose[:3, 3] = numpy.matmul(rotationMatrixHorizontal, backwardLocationsList[indexBackward])
+                    newPose[1:3, 3] += backStartPose[1:3, 3]
+                    newPose[:3, :3] = numpy.matmul(GetRotationMatrixFromTwoVectors(dirForward, backwardDirsList[indexBackward]), orientationForward)  # need rotation matrix from two vector # ? this will break when squareTheta is not 0?
+                    poseList.append(newPose)
                 newPose = copy.deepcopy(poseList[-1])
-                newPose[:3, :3] = poseList[-1][:3, :3]
-                newPose[:3, 3] += dirForward * moveStep
+                newPose[:3, :3] = copy.deepcopy(orientationForward)
                 poseList.append(newPose)
-            orientationForward = copy.copy(poseList[-1][:3, :3])
-            # backward
-            backStartPose = copy.deepcopy(poseList[-1])
-            for indexBackward in range(numStepsBack + 1):
-                newPose = copy.deepcopy(backStartPose)
-                newPose[:3, 3] = numpy.matmul(rotationMatrixHorizontal, backwardLocationsList[indexBackward])
-                newPose[1:3, 3] += backStartPose[1:3, 3]
-                newPose[:3, :3] = numpy.matmul(GetRotationMatrixFromTwoVectors(dirForward, backwardDirsList[indexBackward]), orientationForward)  # need rotation matrix from two vector
-                poseList.append(newPose)
-            newPose = copy.deepcopy(poseList[-1])
-            newPose[:3, :3] = copy.deepcopy(orientationForward)
-            poseList.append(newPose)
         return poseList
 
     def GetPoseList(self):
@@ -134,7 +207,7 @@ class VibrationRollerPathPlanner(object):
             return numpy.array([l, 0]).astype('float')
         else:
             print("unexpected root happened.")
-            from IPython import embed; print('here!'); embed()       
+            from IPython import embed; print('here!'); embed()
 
 
 if __name__ == "__main__":
