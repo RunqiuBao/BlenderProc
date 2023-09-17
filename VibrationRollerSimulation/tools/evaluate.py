@@ -67,7 +67,25 @@ def VisualizeTrajCompare(points, gtpoints):
     pcd2 = open3d.geometry.PointCloud()
     pcd2.points = open3d.utility.Vector3dVector(gtpoints)
     pcd2.colors = open3d.utility.Vector3dVector(numpy.tile(numpy.array([0, 0, 1]), (gtpoints.shape[0], 1)))
-    open3d.visualization.draw_geometries([pcd, pcd2])
+    return pcd, pcd2
+
+
+def VisualizeCorrespondence(points, gtpoints):
+    if isinstance(points, list):
+        points = numpy.concatenate(points, axis=0)
+    if isinstance(gtpoints, list):
+        gtpoints = numpy.concatenate(gtpoints, axis=0)
+    pointsConcat = numpy.concatenate([points, gtpoints], axis=0)
+    indiciesPoints = numpy.arange(0, points.shape[0])[:, numpy.newaxis]
+    indiciesPointsGt = (numpy.arange(0, points.shape[0]) + points.shape[0])[:, numpy.newaxis]
+    lines = numpy.hstack([indiciesPoints, indiciesPointsGt])
+    colors = [[0, 1, 0] for i in range(lines.shape[0])]
+    line_set = open3d.geometry.LineSet(
+        points=open3d.utility.Vector3dVector(pointsConcat),
+        lines=open3d.utility.Vector2iVector(lines),
+    )
+    line_set.colors = open3d.utility.Vector3dVector(colors)
+    return line_set
 
 
 if __name__ == "__main__":
@@ -85,6 +103,8 @@ if __name__ == "__main__":
 
     parser.add_argument('--dataroot', '-i', action='store', type=str, dest='dataroot',
                         help='Path to the data root.')
+    parser.add_argument('--show', '-s', action='store_true', dest='show',
+                        help='whether show visz.')
 
     args, remaining = parser.parse_known_args()
 
@@ -97,5 +117,10 @@ if __name__ == "__main__":
     trackpoints = []
     for trackedPose in trackedPoses:
         trackpoints.append(trackedPose[:3, 3][numpy.newaxis, :])
-    # VisualizeTrajCompare(trackpoints, gtpoints)
-    ComputeRMSATE(trackpoints, gtpoints, mode='3d')
+    pcd, pcd2 = VisualizeTrajCompare(trackpoints, gtpoints)
+    line_set = VisualizeCorrespondence(trackpoints, gtpoints)
+
+    if args.show:
+        open3d.visualization.draw_geometries([pcd, pcd2, line_set])
+    else:
+        ComputeRMSATE(trackpoints, gtpoints, mode='3d')
