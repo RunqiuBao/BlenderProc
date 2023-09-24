@@ -9,6 +9,8 @@ import sys
 sys.path.append(currentDir)  # blenderproc python need this to locate the rest of modules
 
 from common import StereoCamera
+import shutil
+import pickle
 from scipy.spatial.transform import Rotation as R
 
 class StereoCameraRenderer(object):
@@ -51,21 +53,10 @@ if __name__ == "__main__":
     from scipy.spatial.transform import Rotation as R
     import numpy
 
-    myPathPlanner = VibrationRollerPathPlanner(8, 4, 0, moveStep=0.1)
-    cameraPoseList = myPathPlanner.GetPoseList()
+    myPathPlanner = VibrationRollerPathPlanner()
     # cameraPoseList = [numpy.eye(4)]  # profile image
 
-    # render test sequence
-    bproc.init()
-
-    # Create a simple object:
-    scenePath = '/home/runqiu/site2.blend'
-    bkgPath = '/mnt/data/blenderMaterials/hdri/moonless_golf_4k.jpg'
-    obj = bproc.loader.load_blend(scenePath)
-    # bproc.object.delete_multiple(obj[-4:])  # delete those baloons
-    bproc.world.set_world_background_hdr_img(bkgPath)
-
-    isOnlyGeneratePose = True
+    isOnlyGeneratePose = False
     if isOnlyGeneratePose:
         with open("/home/runqiu/tmptmp/test-dataset/ts.txt", "r") as file:
             tsList = file.readlines()
@@ -76,17 +67,25 @@ if __name__ == "__main__":
             else:
                 ts.append(float(line))
         cameraPoseList = myPathPlanner.InitializeRollerPath(
-            8, 4, 0,
+            4, 4, 0,
             camTranslation=None,
             camRotation=None,
             laneWidth=2.0,
-            moveStep=0.1,
+            moveStep=0.01,
             ts=ts,
             timeAnchorsIndicies=numpy.array([
                 [0, 154],
                 [158, 629],
                 [631, 787]
             ])
+        )
+    else:
+        cameraPoseList = myPathPlanner.InitializeRollerPath(
+            4, 4, 0,
+            laneWidth=2.0,
+            moveStep=0.01,
+            vibrationMagnitude=0.1,
+            numStepsHalfVibrationCycle=4
         )
 
     # Set the camera to be in front of the object
@@ -122,31 +121,49 @@ if __name__ == "__main__":
         [0.00000000e+00, 1.77777818e+03 / 2, 3.59500000e+02],
         [0.00000000e+00, 0.00000000e+00, 1.00000000e+00]    
     ])
-    bproc.camera.set_intrinsics_from_K_matrix(K = kk, image_width = 1280, image_height = 720)
-    # initialize stereo camera
-    myStereoCam = StereoCameraRenderer('myStereoCam', int(1280), int(720), kk, 0.8, bproc.camera)
 
-    # Note: auto adjusting KK
+    if isOnlyGeneratePose:
+        # save gt poses
+        outputPosePath = '/home/runqiu/tmptmp/test-dataset/gtpose_timestampaligned.txt'
+        for indexCamPose, camInWorldTransform in enumerate(camInWorldTransformList):
+            print('indexCamPose: {}, new frame pos: {}'.format(indexCamPose, camInWorldTransform[:3, 3]))
+            rRotation = R.from_matrix(camInWorldTransform[:3, :3])
+            qRotation = rRotation.as_quat()
+            onePose = str(indexCamPose) + ' ' + ' '.join(map(str, camInWorldTransform[:3, 3])) + ' ' + ' '.join(map(str, qRotation))
+            if indexCamPose == 0:
+                with open(outputPosePath, 'w') as f:
+                    f.write(onePose)
+            else:
+                with open(outputPosePath, 'a') as f:
+                    f.write('\n' + onePose)
+    else:
+        # save to n groups for parallel rendering
+        numProcess = 4
+        numMinPosesInGroup = int(len(camInWorldTransformList) / numProcess)
+        listPoseGroup = []
+        listPoseGroupIndices = []
+        indexAllPoses = 0
+        for indexProcess in range(numProcess):
+            posesOneGroup = []
+            posesIndicesOneGroup = []
+            for indexInGroup in range(numMinPosesInGroup):
+                posesOneGroup.append(camInWorldTransformList[indexAllPoses])
+                posesIndicesOneGroup.append(indexAllPoses)
+                indexAllPoses += 1
+            listPoseGroup.append(posesOneGroup)
+            listPoseGroupIndices.append(posesIndicesOneGroup)
+        listPoseGroup[0].extend(camInWorldTransformList[indexAllPoses:])
+        listPoseGroupIndices[0].extend(range(indexAllPoses, len(camInWorldTransformList)))
 
-    # Render the data
-    os.makedirs('output/seq/leftCam', exist_ok=True)
-    os.makedirs('output/seq/rightCam', exist_ok=True)
-    outputPosePath = '/home/runqiu/tmptmp/test-dataset/gtpose.txt'
-    for indexCamPose, camInWorldTransform in enumerate(camInWorldTransformList):
-        print('indexCamPose: {}, new frame pos: {}'.format(indexCamPose, camInWorldTransform[:3, 3]))
-        if not isOnlyGeneratePose:
-            leftImage, rightImage = myStereoCam.RenderOnePose(camInWorldTransform, bproc.renderer)
-            cv2.imwrite('output/seq/leftCam/{}.png'.format(str(indexCamPose).zfill(6)), cv2.cvtColor(leftImage, cv2.COLOR_RGB2BGR))
-            cv2.imwrite('output/seq/rightCam/{}.png'.format(str(indexCamPose).zfill(6)), cv2.cvtColor(rightImage, cv2.COLOR_RGB2BGR))
-        rRotation = R.from_matrix(camInWorldTransform[:3, :3])
-        qRotation = rRotation.as_quat()
-        onePose = str(indexCamPose) + ' ' + ' '.join(map(str, camInWorldTransform[:3, 3])) + ' ' + ' '.join(map(str, qRotation))
-        if indexCamPose == 0:
-            with open(outputPosePath, 'w') as f:
-                f.write(onePose)
-        else:
-            with open(outputPosePath, 'a') as f:
-                f.write('\n' + onePose)
-        bproc.utility.reset_keyframes()
+        if os.path.exists("renderingGroupData"):
+            # Remove the folder and its contents
+            shutil.rmtree("renderingGroupData")
+        os.makedirs("renderingGroupData", exist_ok=False)
+        for indexGroup in range(numProcess):
+            dictDataGroup = {}
+            dictDataGroup['kk'] = kk
+            dictDataGroup['poses'] = listPoseGroup[indexGroup]
+            dictDataGroup['poseIndices'] = listPoseGroupIndices[indexGroup]
+            with open('renderingGroupData/{}.pkl'.format(str(indexGroup).zfill(6)), 'wb') as pickle_file:
+                pickle.dump(dictDataGroup, pickle_file)
 
-    from IPython import embed; print('here!'); embed()

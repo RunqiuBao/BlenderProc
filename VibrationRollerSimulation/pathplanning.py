@@ -9,6 +9,7 @@ Based on the localization result, tell the render where is the camera next step.
 |         |         |         |
 |         |         |         |
 """
+from itertools import count
 import numpy
 import math
 import os
@@ -27,27 +28,24 @@ class VibrationRollerPathPlanner(object):
     """
     _poseList = None
 
-    def __init__(self, squareWidth, squareHeight, squareTheta, camTranslation=None, camRotation=None, laneWidth=2.0, moveStep=1.0):
+    def __init__(self):
         """   
         Args:
-            squareTheta: angle between east and square width, 0~90 deg.
-            camTranslation: vector3f
-            camRotationL: vector3f
         
         Returns:
             poseList: a list of camera poses. The starting pose is identity pose.
         """
-        self._poseList = self.InitializeRollerPath(squareWidth, squareHeight, squareTheta, camTranslation, camRotation, laneWidth, moveStep)
+        pass
 
     def InitializeRollerPath(
             self,
             squareWidth,
             squareHeight,
             squareTheta,
-            camTranslation,
-            camRotation,
             laneWidth,
             moveStep,
+            vibrationMagnitude=0.0,
+            numStepsHalfVibrationCycle=4,
             ts=None,
             timeAnchorsIndicies=None
         ):
@@ -61,6 +59,13 @@ class VibrationRollerPathPlanner(object):
         |       | |
         |        ||
         |         *
+
+        Args:
+            ...
+            squareTheta: angle between east and square width, 0~90 deg.
+            ...
+            vibrationMagnitude: float
+            numStepsHalfVibrationCycle: int, half cycle of vibration will last for 3 moveStep.
         """
         numLane = math.ceil(squareWidth / laneWidth)
         poseList = []
@@ -79,6 +84,9 @@ class VibrationRollerPathPlanner(object):
         ])
         poseList.append(startPose)
 
+        if vibrationMagnitude > 0:
+            sinFuncFactor = numpy.pi / numStepsHalfVibrationCycle
+            countStep = 0
         if ts is not None:
             # first lane
             timeSpan = ts[timeAnchorsIndicies[0, 1]] - ts[timeAnchorsIndicies[0, 0]]
@@ -158,6 +166,9 @@ class VibrationRollerPathPlanner(object):
                     newPose = copy.deepcopy(poseList[-1])
                     newPose[:3, :3] = poseList[-1][:3, :3]
                     newPose[:3, 3] += dirForward * moveStep
+                    if vibrationMagnitude > 0:
+                        newPose[2, 3] = vibrationMagnitude * numpy.sin(sinFuncFactor * countStep)  # Note: z is the height direction.
+                        countStep += 1
                     poseList.append(newPose)
                 orientationForward = copy.copy(poseList[-1][:3, :3])
                 # backward
@@ -165,12 +176,15 @@ class VibrationRollerPathPlanner(object):
                 for indexBackward in range(numStepsBack + 1):
                     newPose = copy.deepcopy(backStartPose)
                     newPose[:3, 3] = numpy.matmul(rotationMatrixHorizontal, backwardLocationsList[indexBackward])
-                    newPose[1:3, 3] += backStartPose[1:3, 3]
+                    newPose[1, 3] += backStartPose[1, 3]
+                    if vibrationMagnitude > 0:
+                        newPose[2, 3] = vibrationMagnitude * numpy.sin(sinFuncFactor * countStep)
+                        countStep += 1 
                     newPose[:3, :3] = numpy.matmul(GetRotationMatrixFromTwoVectors(dirForward, backwardDirsList[indexBackward]), orientationForward)  # need rotation matrix from two vector # ? this will break when squareTheta is not 0?
                     poseList.append(newPose)
                 newPose = copy.deepcopy(poseList[-1])
                 newPose[:3, :3] = copy.deepcopy(orientationForward)
-                poseList.append(newPose)
+                poseList.append(newPose)  # Note: stop at place for one pose.
         return poseList
 
     def GetPoseList(self):
