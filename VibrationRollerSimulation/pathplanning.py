@@ -17,6 +17,7 @@ import copy
 from scipy.spatial.transform import Rotation
 import sympy
 from sympy import symbols, Eq, solve
+import random
 
 from common import GetRotationMatrixFromTwoVectors, CacheManager
 
@@ -161,14 +162,17 @@ class VibrationRollerPathPlanner(object):
                     backwardDir = numpy.array([numpy.cos(numpy.arctan(k)), numpy.sin(numpy.arctan(k)), 0])
                     backwardDirsList.append(backwardDir / numpy.linalg.norm(backwardDir))
 
+            randomMagnitude = (random.random() + 1.0) * vibrationMagnitude
             for indexLane in range(numLane):
                 for indexStepForward in range(numStepForward):
                     newPose = copy.deepcopy(poseList[-1])
                     newPose[:3, :3] = poseList[-1][:3, :3]
                     newPose[:3, 3] += dirForward * moveStep
                     if vibrationMagnitude > 0:
-                        newPose[2, 3] = vibrationMagnitude * numpy.sin(sinFuncFactor * countStep)  # Note: z is the height direction.
+                        newPose[2, 3] = randomMagnitude * numpy.sin(sinFuncFactor * countStep)  # Note: z is the height direction.
                         countStep += 1
+                        if countStep % numStepsHalfVibrationCycle == 0:
+                            randomMagnitude = (random.random() + 1.0) * vibrationMagnitude
                     poseList.append(newPose)
                 orientationForward = copy.copy(poseList[-1][:3, :3])
                 # backward
@@ -178,14 +182,46 @@ class VibrationRollerPathPlanner(object):
                     newPose[:3, 3] = numpy.matmul(rotationMatrixHorizontal, backwardLocationsList[indexBackward])
                     newPose[1, 3] += backStartPose[1, 3]
                     if vibrationMagnitude > 0:
-                        newPose[2, 3] = vibrationMagnitude * numpy.sin(sinFuncFactor * countStep)
-                        countStep += 1 
+                        newPose[2, 3] = randomMagnitude * numpy.sin(sinFuncFactor * countStep)
+                        countStep += 1
+                        if countStep % numStepsHalfVibrationCycle == 0:
+                            randomMagnitude = (random.random() + 1.0) * vibrationMagnitude
                     newPose[:3, :3] = numpy.matmul(GetRotationMatrixFromTwoVectors(dirForward, backwardDirsList[indexBackward]), orientationForward)  # need rotation matrix from two vector # ? this will break when squareTheta is not 0?
                     poseList.append(newPose)
                 newPose = copy.deepcopy(poseList[-1])
                 newPose[:3, :3] = copy.deepcopy(orientationForward)
                 poseList.append(newPose)  # Note: stop at place for one pose.
         return poseList
+
+# automize backward size:
+"""
+    # generate backward move dirs
+    backwardDirsList = []
+    backwardLocationsList = []
+    # firstFunc = [-0.25, 2, -4]
+    # dFirstFunc = [-0.5, 2]
+    # secondFunc = [0.25, 0, -2]
+    # dSecondFunc = [0.5, 0]
+    firstFunc = [2*squareHeight/3/laneWidth**2, 4*squareHeight/3/laneWidth, squareHeight]
+    dFirstFunc = [2*2*squareHeight/3/laneWidth**2, 4*squareHeight/3/laneWidth]
+    secondFunc = [-2*squareHeight/3/laneWidth**2, 0, 2*squareHeight/3]
+    dSecondFunc = [-4*squareHeight/3/laneWidth**2, 0]
+
+    for indexStep in range(numStepsBack + 1):
+        y0Base = 0 - laneWidth / numStepsBack * indexStep
+        if indexStep <= (numStepsBack / 2):
+            x0 = firstFunc[0] * y0Base**2 + firstFunc[1] * (y0Base) + firstFunc[2]
+            backwardLocationsList.append(numpy.array([x0, y0Base, 0]))
+            k = dFirstFunc[0] * y0Base + dFirstFunc[1]
+            backwardDir = numpy.array([numpy.sin(numpy.arctan(k)), numpy.cos(numpy.arctan(k)), 0])
+            backwardDirsList.append(backwardDir / numpy.linalg.norm(backwardDir))
+        else:
+            x0 = secondFunc[0] * y0Base**2 + secondFunc[1] * (y0Base) + secondFunc[2]
+            backwardLocationsList.append(numpy.array([x0, y0Base, 0]))
+            k = dSecondFunc[0] * y0Base + dSecondFunc[1]
+            backwardDir = numpy.array([numpy.sin(numpy.arctan(k)), numpy.cos(numpy.arctan(k)), 0])
+            backwardDirsList.append(backwardDir / numpy.linalg.norm(backwardDir))
+"""
 
     def GetPoseList(self):
         return self._poseList

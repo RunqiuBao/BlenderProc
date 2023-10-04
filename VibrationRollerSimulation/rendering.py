@@ -43,6 +43,7 @@ class StereoCameraRenderer(object):
         self._blenderCameraHandler.add_camera_pose(leftCameraInWorldTransform)
         self._blenderCameraHandler.add_camera_pose(self._stereoCamera.GetRightCameraInWorldTransform(leftCameraInWorldTransform))
         observations = blenderRenderer.render()
+
         return observations['colors'][0], observations['colors'][1]
 
 
@@ -58,7 +59,7 @@ if __name__ == "__main__":
 
     isOnlyGeneratePose = False
     if isOnlyGeneratePose:
-        with open("/home/runqiu/tmptmp/test-dataset/ts.txt", "r") as file:
+        with open("/home/runqiu/tmptmp/vslam-0/ts-blur.txt", "r") as file:
             tsList = file.readlines()
         ts = []
         for line in tsList:
@@ -68,32 +69,48 @@ if __name__ == "__main__":
                 ts.append(float(line))
         cameraPoseList = myPathPlanner.InitializeRollerPath(
             4, 4, 0,
-            camTranslation=None,
-            camRotation=None,
             laneWidth=2.0,
-            moveStep=0.01,
+            moveStep=0.005,
             ts=ts,
             timeAnchorsIndicies=numpy.array([
-                [0, 154],
-                [158, 629],
-                [631, 787]
+                # seq2
+                # [0, 154],
+                # [158, 629],
+                # [631, 787]
+                # seq0
+                # [0, 1545],
+                # [1546, 6245],
+                # [6246, 7772]
+                # seq0, vslam
+                [0, 213],
+                [214, 852],
+                [853, 1066]
             ])
         )
     else:
         cameraPoseList = myPathPlanner.InitializeRollerPath(
-            4, 4, 0,
+            6, 4, 0,
+            # 4, 4, 0,
             laneWidth=2.0,
-            moveStep=0.01,
-            vibrationMagnitude=0.1,
-            numStepsHalfVibrationCycle=4
+            moveStep=0.02
+            # moveStep=0.05,
+            # vibrationMagnitude=0.1,
+            # numStepsHalfVibrationCycle=4
         )
 
     # Set the camera to be in front of the object
+    # seq 1
+    # cameraPoseBase = numpy.array([
+    #     [-0.07231751829385757, 0.24019721150398254, -0.9680265784263611, -9.255331993103027],
+    #     [-0.995455801486969, -0.07766836136579514, 0.055094730108976364, 7.211221218109131],
+    #     [-0.06195143982768059, 0.9676119685173035, 0.24472248554229736, 2.187476634979248],
+    #     [0.0, 0.0, 0.0, 1.0]
+    # ])
+    # seq 2
     cameraPoseBase = numpy.array([
-        [-0.07231751829385757, 0.24019721150398254, -0.9680265784263611, -9.255331993103027],
-        [-0.995455801486969, -0.07766836136579514, 0.055094730108976364, 7.211221218109131],
-        [-0.06195143982768059, 0.9676119685173035, 0.24472248554229736, 2.187476634979248],
-        [0.0, 0.0, 0.0, 1.0]
+        [4.0],
+        [-2.2],
+        [2.365],
     ])
     # profile image
     # cameraPoseBase = numpy.array([
@@ -102,18 +119,21 @@ if __name__ == "__main__":
         # [-0.06195143982768059, 0.9676119685173035, 0.24472248554229736, 3.187476634979248],
         # [0.0, 0.0, 0.0, 1.0]
     # ])
-    camTranslationBase = cameraPoseBase[:3, 3]
-    rMatrix = R.from_matrix(cameraPoseBase[:3, :3])
-    camRotationBaseRaw = rMatrix.as_euler('zyx', degrees=False)
-    camRotationBase = [numpy.pi / 2, 0, - numpy.pi / 2]
+    camTranslationBase = numpy.array([4., -2.2, 2.365])
+    camRotationBase = [0, 0, numpy.pi]
+    camTranslationLocal = numpy.array([0, 0, 0])
+    camRotationLocal = [numpy.pi / 2, 0, -numpy.pi / 2]
     workStartInWorldTransform = bproc.math.build_transformation_mat(camTranslationBase, camRotationBase)
+    camViewTransform = bproc.math.build_transformation_mat(camTranslationLocal, camRotationLocal)
     camInWorldTransformList = []
     for cameraInWorkStartTransform in cameraPoseList:
-        camTranslationInWorld = cameraInWorkStartTransform[:3, 3] + workStartInWorldTransform[:3, 3]
-        camRotationInWorld = numpy.matmul(cameraInWorkStartTransform[:3, :3], workStartInWorldTransform[:3, :3])
-        camInWorldTransform = numpy.eye(4)
-        camInWorldTransform[:3, :3] = camRotationInWorld
-        camInWorldTransform[:3, 3] = camTranslationInWorld
+        # camTranslationInWorld = cameraInWorkStartTransform[:3, 3] + workStartInWorldTransform[:3, 3]
+        # camRotationInWorld = numpy.matmul(cameraInWorkStartTransform[:3, :3], workStartInWorldTransform[:3, :3])
+        # camInWorldTransform = numpy.eye(4)
+        # camInWorldTransform[:3, :3] = camRotationInWorld
+        # camInWorldTransform[:3, 3] = camTranslationInWorld
+        camInWorldTransform = numpy.matmul(workStartInWorldTransform, cameraInWorkStartTransform)
+        camInWorldTransform = numpy.matmul(camInWorldTransform, camViewTransform)
         camInWorldTransformList.append(camInWorldTransform)
     # bproc.camera.set_resolution(image_width=1280, image_height=720)
     kk = numpy.array([
@@ -124,7 +144,7 @@ if __name__ == "__main__":
 
     if isOnlyGeneratePose:
         # save gt poses
-        outputPosePath = '/home/runqiu/tmptmp/test-dataset/gtpose_timestampaligned.txt'
+        outputPosePath = '/home/runqiu/tmptmp/vslam-0/gtpose_timealigned.txt'
         for indexCamPose, camInWorldTransform in enumerate(camInWorldTransformList):
             print('indexCamPose: {}, new frame pos: {}'.format(indexCamPose, camInWorldTransform[:3, 3]))
             rRotation = R.from_matrix(camInWorldTransform[:3, :3])
@@ -138,7 +158,7 @@ if __name__ == "__main__":
                     f.write('\n' + onePose)
     else:
         # save to n groups for parallel rendering
-        numProcess = 4
+        numProcess = 12
         numMinPosesInGroup = int(len(camInWorldTransformList) / numProcess)
         listPoseGroup = []
         listPoseGroupIndices = []
@@ -154,7 +174,6 @@ if __name__ == "__main__":
             listPoseGroupIndices.append(posesIndicesOneGroup)
         listPoseGroup[0].extend(camInWorldTransformList[indexAllPoses:])
         listPoseGroupIndices[0].extend(range(indexAllPoses, len(camInWorldTransformList)))
-
         if os.path.exists("renderingGroupData"):
             # Remove the folder and its contents
             shutil.rmtree("renderingGroupData")
