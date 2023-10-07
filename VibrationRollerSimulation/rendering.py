@@ -59,7 +59,7 @@ if __name__ == "__main__":
 
     isOnlyGeneratePose = False
     if isOnlyGeneratePose:
-        with open("/home/runqiu/tmptmp/vslam-0/ts-blur.txt", "r") as file:
+        with open("/home/runqiu/tmptmp/vslam-2/ts-blur.txt", "r") as file:
             tsList = file.readlines()
         ts = []
         for line in tsList:
@@ -89,11 +89,11 @@ if __name__ == "__main__":
         )
     else:
         cameraPoseList = myPathPlanner.InitializeRollerPath(
-            6, 4, 0,
+            4, 4, 0,
             # 4, 4, 0,
             laneWidth=2.0,
-            moveStep=0.02
-            # moveStep=0.05,
+            moveStep=0.01
+            # moveStep=0.005,
             # vibrationMagnitude=0.1,
             # numStepsHalfVibrationCycle=4
         )
@@ -108,9 +108,9 @@ if __name__ == "__main__":
     # ])
     # seq 2
     cameraPoseBase = numpy.array([
-        [4.0],
-        [-2.2],
-        [2.365],
+        [-9.255331993103027],
+        [7.211221218109131],
+        [2.187476634979248],
     ])
     # profile image
     # cameraPoseBase = numpy.array([
@@ -119,8 +119,8 @@ if __name__ == "__main__":
         # [-0.06195143982768059, 0.9676119685173035, 0.24472248554229736, 3.187476634979248],
         # [0.0, 0.0, 0.0, 1.0]
     # ])
-    camTranslationBase = numpy.array([4., -2.2, 2.365])
-    camRotationBase = [0, 0, numpy.pi]
+    camTranslationBase = numpy.array([-9.255331993103027, 7.211221218109131, 2.187476634979248])
+    camRotationBase = [0, 0, 0]
     camTranslationLocal = numpy.array([0, 0, 0])
     camRotationLocal = [numpy.pi / 2, 0, -numpy.pi / 2]
     workStartInWorldTransform = bproc.math.build_transformation_mat(camTranslationBase, camRotationBase)
@@ -144,7 +144,7 @@ if __name__ == "__main__":
 
     if isOnlyGeneratePose:
         # save gt poses
-        outputPosePath = '/home/runqiu/tmptmp/vslam-0/gtpose_timealigned.txt'
+        outputPosePath = '/home/runqiu/tmptmp/vslam-2/gtpose_timealigned.txt'
         for indexCamPose, camInWorldTransform in enumerate(camInWorldTransformList):
             print('indexCamPose: {}, new frame pos: {}'.format(indexCamPose, camInWorldTransform[:3, 3]))
             rRotation = R.from_matrix(camInWorldTransform[:3, :3])

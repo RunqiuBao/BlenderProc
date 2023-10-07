@@ -45,7 +45,7 @@ if __name__ == "__main__":
     bproc.init()
 
     # Create a simple object:
-    scenePath = '/home/runqiu/site2_forevent_2.blend'
+    scenePath = '/home/runqiu/site2_forevent.blend'
     bkgPath = '/mnt/data/blenderMaterials/hdri/moonless_golf_4k.jpg'
     obj = bproc.loader.load_blend(scenePath)
     # bproc.object.delete_multiple([obj[-1]])  # delete those baloons
@@ -61,21 +61,21 @@ if __name__ == "__main__":
     # Note: auto adjusting KK
 
     # Render the data
-    os.makedirs('output/seq/leftCam', exist_ok=True)
-    os.makedirs('output/seq/rightCam', exist_ok=True)
+    os.makedirs('/home/runqiu/tmptmp/vslam-2/leftcam/', exist_ok=True)
+    os.makedirs('/home/runqiu/tmptmp/vslam-2/rightcam/', exist_ok=True)
     for indexToIndices, camInWorldTransform in enumerate(poses):
         print('indexCamPose: {}, new frame pos: {}'.format(poseIndices[indexToIndices], camInWorldTransform[:3, 3]))
-        rotateDownTransform = numpy.array([
-            [1, 0, 0, 0],
-            [0, 0.9848, 0.1736, 0],
-            [0, -0.1736, 0.9848, 0],
-            [0, 0, 0, 1]
-        ])  # Note: rotate down by 15 deg
-        camInWorldTransform = numpy.matmul(camInWorldTransform, rotateDownTransform)
+        # rotateDownTransform = numpy.array([
+        #     [1, 0, 0, 0],
+        #     [0, 0.9848, 0.1736, 0],
+        #     [0, -0.1736, 0.9848, 0],
+        #     [0, 0, 0, 1]
+        # ])  # Note: rotate down by 15 deg
+        # camInWorldTransform = numpy.matmul(camInWorldTransform, rotateDownTransform)
         leftImage, rightImage = myStereoCam.RenderOnePose(camInWorldTransform, bproc.renderer)
         starttime = time.time()
-        cv2.imwrite('/home/runqiu/tmptmp/vslam-1/leftcam/{}.png'.format(str(poseIndices[indexToIndices]).zfill(6)), cv2.cvtColor(leftImage, cv2.COLOR_RGB2BGR))
-        cv2.imwrite('/home/runqiu/tmptmp/vslam-1/rightcam/{}.png'.format(str(poseIndices[indexToIndices]).zfill(6)), cv2.cvtColor(rightImage, cv2.COLOR_RGB2BGR))
+        cv2.imwrite('/home/runqiu/tmptmp/vslam-2/leftcam/{}.png'.format(str(poseIndices[indexToIndices]).zfill(6)), cv2.cvtColor(leftImage, cv2.COLOR_RGB2BGR))
+        cv2.imwrite('/home/runqiu/tmptmp/vslam-2/rightcam/{}.png'.format(str(poseIndices[indexToIndices]).zfill(6)), cv2.cvtColor(rightImage, cv2.COLOR_RGB2BGR))
         print("save time cost: {} sec".format(time.time() - starttime))
         bproc.utility.reset_keyframes()
 
