@@ -57,7 +57,7 @@ if __name__ == "__main__":
     myPathPlanner = VibrationRollerPathPlanner()
     # cameraPoseList = [numpy.eye(4)]  # profile image
 
-    isOnlyGeneratePose = False
+    isOnlyGeneratePose = True
     if isOnlyGeneratePose:
         with open("/home/runqiu/tmptmp/vslam-2/ts-blur.txt", "r") as file:
             tsList = file.readlines()
@@ -81,10 +81,10 @@ if __name__ == "__main__":
                 # [0, 1545],
                 # [1546, 6245],
                 # [6246, 7772]
-                # seq0, vslam
-                [0, 213],
-                [214, 852],
-                [853, 1066]
+                # seq2, vslam
+                [0, 401],
+                [402, 1601],
+                [1602, 2003]
             ])
         )
     else:
