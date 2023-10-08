@@ -138,6 +138,39 @@ class VibrationRollerPathPlanner(object):
                 newPose[:3, 3] += dirForward * squareHeight * (ts[indexT] - ts[timeAnchorsIndicies[2, 0]]) / timeSpan
                 newPose[:3, :3] = orientationForward
                 poseList.append(newPose)
+            # fourth (backward)
+            timeSpan = ts[timeAnchorsIndicies[3, 1]] - ts[timeAnchorsIndicies[3, 0]]
+            startPose = poseList[-1]
+            orientationForward = copy.deepcopy(startPose[:3, :3])
+            for indexT in range(timeAnchorsIndicies[3, 0], timeAnchorsIndicies[3, 1] + 1):
+                x0 = squareHeight - squareHeight * (ts[indexT] - ts[timeAnchorsIndicies[3, 0]]) / timeSpan
+                if ts[indexT] <= (ts[timeAnchorsIndicies[3, 0]] + timeSpan / 2):
+                    y0 = firstFunc[0] * x0**2 + firstFunc[1] * (x0) + firstFunc[2]
+                    k = dFirstFunc[0] * x0 + dFirstFunc[1]
+                else:
+                    y0 = secondFunc[0] * x0**2 + secondFunc[1] * (x0) + secondFunc[2]
+                    k = dSecondFunc[0] * x0 + dSecondFunc[1]
+                backwardLocation = numpy.array([x0, y0, 0])
+                backwardDir = numpy.array([numpy.cos(numpy.arctan(k)), numpy.sin(numpy.arctan(k)), 0])
+                backwardDir = backwardDir / numpy.linalg.norm(backwardDir)
+                newPose = numpy.eye(4)
+                newPose[:3, 3] = numpy.matmul(rotationMatrixHorizontal, backwardLocation)
+                newPose[1:3, 3] += startPose[1:3, 3]  # Note: if the lane is biased from 0, need to add the starting value of y.
+                newPose[:3, :3] = numpy.matmul(GetRotationMatrixFromTwoVectors(numpy.array([1, 0, 0]), backwardDir), orientationForward)
+                poseList.append(newPose)
+            # add static poses
+            if timeAnchorsIndicies[4, 0] > timeAnchorsIndicies[3, 1]:
+                staticPose = copy.deepcopy(poseList[-1])
+                for time in range(timeAnchorsIndicies[4, 0] - timeAnchorsIndicies[3, 1] - 1):
+                    poseList.append(staticPose)
+            # fifth lane
+            timeSpan = ts[timeAnchorsIndicies[4, 1]] - ts[timeAnchorsIndicies[4, 0]]
+            startPose = poseList[-1]
+            for indexT in range(timeAnchorsIndicies[4, 0], timeAnchorsIndicies[4, 1] + 1):
+                newPose = copy.deepcopy(startPose)
+                newPose[:3, 3] += dirForward * squareHeight * (ts[indexT] - ts[timeAnchorsIndicies[4, 0]]) / timeSpan
+                newPose[:3, :3] = orientationForward
+                poseList.append(newPose)
         else:
             # generate backward move dirs
             backwardDirsList = []
@@ -193,36 +226,6 @@ class VibrationRollerPathPlanner(object):
                 poseList.append(newPose)  # Note: stop at place for one pose.
         return poseList
 
-# automize backward size:
-"""
-    # generate backward move dirs
-    backwardDirsList = []
-    backwardLocationsList = []
-    # firstFunc = [-0.25, 2, -4]
-    # dFirstFunc = [-0.5, 2]
-    # secondFunc = [0.25, 0, -2]
-    # dSecondFunc = [0.5, 0]
-    firstFunc = [2*squareHeight/3/laneWidth**2, 4*squareHeight/3/laneWidth, squareHeight]
-    dFirstFunc = [2*2*squareHeight/3/laneWidth**2, 4*squareHeight/3/laneWidth]
-    secondFunc = [-2*squareHeight/3/laneWidth**2, 0, 2*squareHeight/3]
-    dSecondFunc = [-4*squareHeight/3/laneWidth**2, 0]
-
-    for indexStep in range(numStepsBack + 1):
-        y0Base = 0 - laneWidth / numStepsBack * indexStep
-        if indexStep <= (numStepsBack / 2):
-            x0 = firstFunc[0] * y0Base**2 + firstFunc[1] * (y0Base) + firstFunc[2]
-            backwardLocationsList.append(numpy.array([x0, y0Base, 0]))
-            k = dFirstFunc[0] * y0Base + dFirstFunc[1]
-            backwardDir = numpy.array([numpy.sin(numpy.arctan(k)), numpy.cos(numpy.arctan(k)), 0])
-            backwardDirsList.append(backwardDir / numpy.linalg.norm(backwardDir))
-        else:
-            x0 = secondFunc[0] * y0Base**2 + secondFunc[1] * (y0Base) + secondFunc[2]
-            backwardLocationsList.append(numpy.array([x0, y0Base, 0]))
-            k = dSecondFunc[0] * y0Base + dSecondFunc[1]
-            backwardDir = numpy.array([numpy.sin(numpy.arctan(k)), numpy.cos(numpy.arctan(k)), 0])
-            backwardDirsList.append(backwardDir / numpy.linalg.norm(backwardDir))
-"""
-
     def GetPoseList(self):
         return self._poseList
 
@@ -264,3 +267,33 @@ if __name__ == "__main__":
     myPathPlanner = VibrationRollerPathPlanner(40, 20 , 0, None, None, 2, 1)
     aa = myPathPlanner.GetPoseList()
     from IPython import embed; print('here!'); embed()
+
+"""
+# automize backward size:
+    # generate backward move dirs
+    backwardDirsList = []
+    backwardLocationsList = []
+    # firstFunc = [-0.25, 2, -4]
+    # dFirstFunc = [-0.5, 2]
+    # secondFunc = [0.25, 0, -2]
+    # dSecondFunc = [0.5, 0]
+    firstFunc = [2*squareHeight/3/laneWidth**2, 4*squareHeight/3/laneWidth, squareHeight]
+    dFirstFunc = [2*2*squareHeight/3/laneWidth**2, 4*squareHeight/3/laneWidth]
+    secondFunc = [-2*squareHeight/3/laneWidth**2, 0, 2*squareHeight/3]
+    dSecondFunc = [-4*squareHeight/3/laneWidth**2, 0]
+
+    for indexStep in range(numStepsBack + 1):
+        y0Base = 0 - laneWidth / numStepsBack * indexStep
+        if indexStep <= (numStepsBack / 2):
+            x0 = firstFunc[0] * y0Base**2 + firstFunc[1] * (y0Base) + firstFunc[2]
+            backwardLocationsList.append(numpy.array([x0, y0Base, 0]))
+            k = dFirstFunc[0] * y0Base + dFirstFunc[1]
+            backwardDir = numpy.array([numpy.sin(numpy.arctan(k)), numpy.cos(numpy.arctan(k)), 0])
+            backwardDirsList.append(backwardDir / numpy.linalg.norm(backwardDir))
+        else:
+            x0 = secondFunc[0] * y0Base**2 + secondFunc[1] * (y0Base) + secondFunc[2]
+            backwardLocationsList.append(numpy.array([x0, y0Base, 0]))
+            k = dSecondFunc[0] * y0Base + dSecondFunc[1]
+            backwardDir = numpy.array([numpy.sin(numpy.arctan(k)), numpy.cos(numpy.arctan(k)), 0])
+            backwardDirsList.append(backwardDir / numpy.linalg.norm(backwardDir))
+"""
