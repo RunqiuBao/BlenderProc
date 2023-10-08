@@ -9,6 +9,7 @@ Based on the localization result, tell the render where is the camera next step.
 |         |         |         |
 |         |         |         |
 """
+from tracemalloc import start
 import numpy
 import math
 import os
@@ -27,7 +28,7 @@ class VibrationRollerPathPlanner(object):
     """
     _poseList = None
 
-    def __init__(self, squareWidth, squareHeight, squareTheta, camTranslation=None, camRotation=None, laneWidth=2.0, moveStep=1.0):
+    def __init__(self):
         """   
         Args:
             squareTheta: angle between east and square width, 0~90 deg.
@@ -37,17 +38,15 @@ class VibrationRollerPathPlanner(object):
         Returns:
             poseList: a list of camera poses. The starting pose is identity pose.
         """
-        self._poseList = self.InitializeRollerPath(squareWidth, squareHeight, squareTheta, camTranslation, camRotation, laneWidth, moveStep)
+        pass
 
     def InitializeRollerPath(
             self,
-            squareWidth,
-            squareHeight,
+            distanceToGo,
             squareTheta,
-            camTranslation,
-            camRotation,
-            laneWidth,
             moveStep,
+            vibrationMagnitude=0.0,
+            numStepsHalfVibrationCycle=4,
             ts=None,
             timeAnchorsIndicies=None
         ):
@@ -62,15 +61,10 @@ class VibrationRollerPathPlanner(object):
         |        ||
         |         *
         """
-        numLane = math.ceil(squareWidth / laneWidth)
         poseList = []
-        numStepForward = math.ceil(squareHeight / moveStep)
-        dirForward = numpy.array([numStepForward * moveStep * math.sin(numpy.pi / 2 - math.radians(squareTheta)), numStepForward * moveStep * math.cos(numpy.pi / 2 - math.radians(squareTheta)), 0])  # x is in SquareHeight direction, y is in minus SquareWidth direction.
+        numStepForward = math.ceil(distanceToGo / moveStep)
+        dirForward = numpy.array([numStepForward * moveStep * math.cos(numpy.pi / 2 - math.radians(squareTheta)), -1 * numStepForward * moveStep * math.sin(numpy.pi / 2 - math.radians(squareTheta)), 0])  # x is in SquareHeight direction, y is in minus SquareWidth direction.
         dirForward = dirForward / numpy.linalg.norm(dirForward)
-        rotationMatrixHorizontal = Rotation.from_rotvec(math.radians(squareTheta) * numpy.array([0, 0, 1]))
-        rotationMatrixHorizontal = rotationMatrixHorizontal.as_matrix()
-        numStepsBack = int(squareHeight / moveStep) * 3  # Note: backward need to be slow. Because it contains rotation.
-        numStepsBack = numStepsBack if numStepsBack % 2 == 0 else (numStepsBack + 1)
         startPose = numpy.eye(4)
         startPose[:3, :3] = numpy.array([
             [numpy.cos(squareTheta), -numpy.sin(squareTheta), 0],
@@ -78,6 +72,13 @@ class VibrationRollerPathPlanner(object):
             [0, 0, 1]
         ])
         poseList.append(startPose)
+        if vibrationMagnitude > 0:
+            sinFuncFactor = numpy.pi / numStepsHalfVibrationCycle
+            for i in range(4 * numStepsHalfVibrationCycle + 1):
+                newPose = copy.deepcopy(startPose)
+                newPose[2, 3] = vibrationMagnitude * numpy.sin(sinFuncFactor * i)
+                poseList.append(newPose)
+            countStep = 0
 
         if ts is not None:
             # first lane
@@ -85,92 +86,22 @@ class VibrationRollerPathPlanner(object):
             startPose = poseList[-1]
             for indexT in range(timeAnchorsIndicies[0, 0] + 1, timeAnchorsIndicies[0, 1] + 1):
                 newPose = copy.deepcopy(startPose)
-                newPose[:3, 3] += dirForward * squareHeight * (ts[indexT] - ts[timeAnchorsIndicies[0, 0]]) / timeSpan
+                newPose[:3, 3] += dirForward * distanceToGo * (ts[indexT] - ts[timeAnchorsIndicies[0, 0]]) / timeSpan
                 poseList.append(newPose)
             # add static poses
             if timeAnchorsIndicies[1, 0] > timeAnchorsIndicies[0, 1]:
                 staticPose = copy.deepcopy(poseList[-1])
                 for time in range(timeAnchorsIndicies[1, 0] - timeAnchorsIndicies[0, 1] - 1):
                     poseList.append(staticPose)
-            # second (backward)
-            firstFunc = [-0.25, 2, -4]
-            dFirstFunc = [-0.5, 2]
-            secondFunc = [0.25, 0, -2]
-            dSecondFunc = [0.5, 0]
-            timeSpan = ts[timeAnchorsIndicies[1, 1]] - ts[timeAnchorsIndicies[1, 0]]
-            startPose = poseList[-1]
-            orientationForward = copy.deepcopy(startPose[:3, :3])
-            for indexT in range(timeAnchorsIndicies[1, 0], timeAnchorsIndicies[1, 1] + 1):
-                x0 = squareHeight - squareHeight * (ts[indexT] - ts[timeAnchorsIndicies[1, 0]]) / timeSpan
-                if ts[indexT] <= (ts[timeAnchorsIndicies[1, 0]] + timeSpan / 2):
-                    y0 = firstFunc[0] * x0**2 + firstFunc[1] * (x0) + firstFunc[2]
-                    k = dFirstFunc[0] * x0 + dFirstFunc[1]
-                else:
-                    y0 = secondFunc[0] * x0**2 + secondFunc[1] * (x0) + secondFunc[2]
-                    k = dSecondFunc[0] * x0 + dSecondFunc[1]
-                backwardLocation = numpy.array([x0, y0, 0])
-                backwardDir = numpy.array([numpy.cos(numpy.arctan(k)), numpy.sin(numpy.arctan(k)), 0])
-                backwardDir = backwardDir / numpy.linalg.norm(backwardDir)
-                newPose = numpy.eye(4)
-                newPose[:3, 3] = numpy.matmul(rotationMatrixHorizontal, backwardLocation)
-                newPose[1:3, 3] += startPose[1:3, 3]  # Note: if the lane is biased from 0, need to add the starting value of y.
-                newPose[:3, :3] = numpy.matmul(GetRotationMatrixFromTwoVectors(numpy.array([1, 0, 0]), backwardDir), orientationForward)
-                poseList.append(newPose)
-            # add static poses
-            if timeAnchorsIndicies[2, 0] > timeAnchorsIndicies[1, 1]:
-                staticPose = copy.deepcopy(poseList[-1])
-                for time in range(timeAnchorsIndicies[2, 0] - timeAnchorsIndicies[1, 1] - 1):
-                    poseList.append(staticPose)
-            # third lane
-            timeSpan = ts[timeAnchorsIndicies[2, 1]] - ts[timeAnchorsIndicies[2, 0]]
-            startPose = poseList[-1]
-            for indexT in range(timeAnchorsIndicies[2, 0], timeAnchorsIndicies[2, 1] + 1):
-                newPose = copy.deepcopy(startPose)
-                newPose[:3, 3] += dirForward * squareHeight * (ts[indexT] - ts[timeAnchorsIndicies[2, 0]]) / timeSpan
-                newPose[:3, :3] = orientationForward
-                poseList.append(newPose)
         else:
-            # generate backward move dirs
-            backwardDirsList = []
-            backwardLocationsList = []
-            firstFunc = [-0.25, 2, -4]
-            dFirstFunc = [-0.5, 2]
-            secondFunc = [0.25, 0, -2]
-            dSecondFunc = [0.5, 0]
-
-            for indexStep in range(numStepsBack + 1):
-                x0 = squareHeight - squareHeight / numStepsBack * indexStep
-                if indexStep <= (numStepsBack / 2):
-                    y0 = firstFunc[0] * x0**2 + firstFunc[1] * (x0) + firstFunc[2]
-                    backwardLocationsList.append(numpy.array([x0, y0, 0]))
-                    k = dFirstFunc[0] * x0 + dFirstFunc[1]
-                    backwardDir = numpy.array([numpy.cos(numpy.arctan(k)), numpy.sin(numpy.arctan(k)), 0])
-                    backwardDirsList.append(backwardDir / numpy.linalg.norm(backwardDir))
-                else:
-                    y0 = secondFunc[0] * x0**2 + secondFunc[1] * (x0) + secondFunc[2]
-                    backwardLocationsList.append(numpy.array([x0, y0, 0]))
-                    k = dSecondFunc[0] * x0 + dSecondFunc[1]
-                    backwardDir = numpy.array([numpy.cos(numpy.arctan(k)), numpy.sin(numpy.arctan(k)), 0])
-                    backwardDirsList.append(backwardDir / numpy.linalg.norm(backwardDir))
-
-            for indexLane in range(numLane):
-                for indexStepForward in range(numStepForward):
-                    newPose = copy.deepcopy(poseList[-1])
-                    newPose[:3, :3] = poseList[-1][:3, :3]
-                    newPose[:3, 3] += dirForward * moveStep
-                    poseList.append(newPose)
-                orientationForward = copy.copy(poseList[-1][:3, :3])
-                # backward
-                backStartPose = copy.deepcopy(poseList[-1])
-                for indexBackward in range(numStepsBack + 1):
-                    newPose = copy.deepcopy(backStartPose)
-                    newPose[:3, 3] = numpy.matmul(rotationMatrixHorizontal, backwardLocationsList[indexBackward])
-                    newPose[1:3, 3] += backStartPose[1:3, 3]
-                    newPose[:3, :3] = numpy.matmul(GetRotationMatrixFromTwoVectors(dirForward, backwardDirsList[indexBackward]), orientationForward)  # need rotation matrix from two vector # ? this will break when squareTheta is not 0?
-                    poseList.append(newPose)
+            for indexStepForward in range(numStepForward):
                 newPose = copy.deepcopy(poseList[-1])
-                newPose[:3, :3] = copy.deepcopy(orientationForward)
+                newPose[:3, :3] = poseList[-1][:3, :3]
+                newPose[:3, 3] += dirForward * moveStep
                 poseList.append(newPose)
+                if vibrationMagnitude > 0:
+                    newPose[2, 3] = vibrationMagnitude * numpy.sin(sinFuncFactor * countStep)  # Note: z is the height direction.
+                    countStep += 1
         return poseList
 
     def GetPoseList(self):

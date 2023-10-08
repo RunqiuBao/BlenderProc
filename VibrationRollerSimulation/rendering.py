@@ -51,21 +51,20 @@ if __name__ == "__main__":
     from scipy.spatial.transform import Rotation as R
     import numpy
 
-    myPathPlanner = VibrationRollerPathPlanner(8, 4, 0, moveStep=0.1)
-    cameraPoseList = myPathPlanner.GetPoseList()
+    myPathPlanner = VibrationRollerPathPlanner()
     # cameraPoseList = [numpy.eye(4)]  # profile image
 
     # render test sequence
     bproc.init()
 
     # Create a simple object:
-    scenePath = '/home/runqiu/site2.blend'
-    bkgPath = '/mnt/data/blenderMaterials/hdri/moonless_golf_4k.jpg'
+    scenePath = '/home/runqiu/site2_forevent_3.blend'
+    bkgPath = '/mnt/data/blenderMaterials/hdri/resting_place_2_4k.exr'
     obj = bproc.loader.load_blend(scenePath)
     # bproc.object.delete_multiple(obj[-4:])  # delete those baloons
     bproc.world.set_world_background_hdr_img(bkgPath)
 
-    isOnlyGeneratePose = True
+    isOnlyGeneratePose = False
     if isOnlyGeneratePose:
         with open("/home/runqiu/tmptmp/test-dataset/ts.txt", "r") as file:
             tsList = file.readlines()
@@ -76,11 +75,11 @@ if __name__ == "__main__":
             else:
                 ts.append(float(line))
         cameraPoseList = myPathPlanner.InitializeRollerPath(
-            8, 4, 0,
+            1, 0,
             camTranslation=None,
             camRotation=None,
             laneWidth=2.0,
-            moveStep=0.1,
+            moveStep=0.05,
             ts=ts,
             timeAnchorsIndicies=numpy.array([
                 [0, 154],
@@ -88,33 +87,30 @@ if __name__ == "__main__":
                 [631, 787]
             ])
         )
+    else:
+        cameraPoseList = myPathPlanner.InitializeRollerPath(
+            1, 0,
+            moveStep=0.002,
+            vibrationMagnitude=0.01,
+            numStepsHalfVibrationCycle=8
+        )
 
     # Set the camera to be in front of the object
     cameraPoseBase = numpy.array([
-        [-0.07231751829385757, 0.24019721150398254, -0.9680265784263611, -9.255331993103027],
-        [-0.995455801486969, -0.07766836136579514, 0.055094730108976364, 7.211221218109131],
-        [-0.06195143982768059, 0.9676119685173035, 0.24472248554229736, 2.187476634979248],
-        [0.0, 0.0, 0.0, 1.0]
+        [-6.3081],
+        [8.69168],
+        [1.15959],
     ])
-    # profile image
-    # cameraPoseBase = numpy.array([
-        # [-0.07231751829385757, 0.24019721150398254, -0.9680265784263611, -18.255331993103027],  # Note: - is back move
-        # [-0.995455801486969, -0.07766836136579514, 0.055094730108976364, 3.211221218109131],   # Note: - is right move
-        # [-0.06195143982768059, 0.9676119685173035, 0.24472248554229736, 3.187476634979248],
-        # [0.0, 0.0, 0.0, 1.0]
-    # ])
-    camTranslationBase = cameraPoseBase[:3, 3]
-    rMatrix = R.from_matrix(cameraPoseBase[:3, :3])
-    camRotationBaseRaw = rMatrix.as_euler('zyx', degrees=False)
-    camRotationBase = [numpy.pi / 2, 0, - numpy.pi / 2]
+    camTranslationBase = numpy.array([-6.3081, 8.69168, 1.15959])
+    camRotationBase = [0, 0, 0]
+    camTranslationLocal = numpy.array([0, 0, 0])
+    camRotationLocal = [numpy.pi / 2, 0, -numpy.pi / 2]
     workStartInWorldTransform = bproc.math.build_transformation_mat(camTranslationBase, camRotationBase)
+    camViewTransform = bproc.math.build_transformation_mat(camTranslationLocal, camRotationLocal)
     camInWorldTransformList = []
     for cameraInWorkStartTransform in cameraPoseList:
-        camTranslationInWorld = cameraInWorkStartTransform[:3, 3] + workStartInWorldTransform[:3, 3]
-        camRotationInWorld = numpy.matmul(cameraInWorkStartTransform[:3, :3], workStartInWorldTransform[:3, :3])
-        camInWorldTransform = numpy.eye(4)
-        camInWorldTransform[:3, :3] = camRotationInWorld
-        camInWorldTransform[:3, 3] = camTranslationInWorld
+        camInWorldTransform = numpy.matmul(workStartInWorldTransform, cameraInWorkStartTransform)
+        camInWorldTransform = numpy.matmul(camInWorldTransform, camViewTransform)
         camInWorldTransformList.append(camInWorldTransform)
     # bproc.camera.set_resolution(image_width=1280, image_height=720)
     kk = numpy.array([
@@ -129,15 +125,15 @@ if __name__ == "__main__":
     # Note: auto adjusting KK
 
     # Render the data
-    os.makedirs('output/seq/leftCam', exist_ok=True)
-    os.makedirs('output/seq/rightCam', exist_ok=True)
-    outputPosePath = '/home/runqiu/tmptmp/test-dataset/gtpose.txt'
+    os.makedirs('/home/runqiu/tmptmp/vslam-4/leftcam', exist_ok=True)
+    os.makedirs('/home/runqiu/tmptmp/vslam-4/rightcam', exist_ok=True)
+    outputPosePath = '/home/runqiu/tmptmp/vslam-3/gtpose.txt'
     for indexCamPose, camInWorldTransform in enumerate(camInWorldTransformList):
         print('indexCamPose: {}, new frame pos: {}'.format(indexCamPose, camInWorldTransform[:3, 3]))
         if not isOnlyGeneratePose:
             leftImage, rightImage = myStereoCam.RenderOnePose(camInWorldTransform, bproc.renderer)
-            cv2.imwrite('output/seq/leftCam/{}.png'.format(str(indexCamPose).zfill(6)), cv2.cvtColor(leftImage, cv2.COLOR_RGB2BGR))
-            cv2.imwrite('output/seq/rightCam/{}.png'.format(str(indexCamPose).zfill(6)), cv2.cvtColor(rightImage, cv2.COLOR_RGB2BGR))
+            cv2.imwrite('/home/runqiu/tmptmp/vslam-4/leftcam/{}.png'.format(str(indexCamPose).zfill(6)), cv2.cvtColor(leftImage, cv2.COLOR_RGB2BGR))
+            cv2.imwrite('/home/runqiu/tmptmp/vslam-4/rightcam/{}.png'.format(str(indexCamPose).zfill(6)), cv2.cvtColor(rightImage, cv2.COLOR_RGB2BGR))
         rRotation = R.from_matrix(camInWorldTransform[:3, :3])
         qRotation = rRotation.as_quat()
         onePose = str(indexCamPose) + ' ' + ' '.join(map(str, camInWorldTransform[:3, 3])) + ' ' + ' '.join(map(str, qRotation))
