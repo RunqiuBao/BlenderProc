@@ -57,9 +57,9 @@ if __name__ == "__main__":
     myPathPlanner = VibrationRollerPathPlanner()
     # cameraPoseList = [numpy.eye(4)]  # profile image
 
-    isOnlyGeneratePose = False
+    isOnlyGeneratePose = True
     if isOnlyGeneratePose:
-        with open("/home/runqiu/tmptmp/vslam-0/ts-blur.txt", "r") as file:
+        with open("/home/runqiu/tmptmp/eventstereoslam-dataset-1/ts.txt", "r") as file:
             tsList = file.readlines()
         ts = []
         for line in tsList:
@@ -68,7 +68,7 @@ if __name__ == "__main__":
             else:
                 ts.append(float(line))
         cameraPoseList = myPathPlanner.InitializeRollerPath(
-            4, 4, 0,
+            6, 4, 0,
             laneWidth=2.0,
             moveStep=0.005,
             ts=ts,
@@ -81,10 +81,12 @@ if __name__ == "__main__":
                 # [0, 1545],
                 # [1546, 6245],
                 # [6246, 7772]
-                # seq0, vslam
-                [0, 213],
-                [214, 852],
-                [853, 1066]
+                # seq1,
+                [0, 155],
+                [156, 625],
+                [626, 780],
+                [781, 1249],
+                [1250, 1405]
             ])
         )
     else:
@@ -144,7 +146,7 @@ if __name__ == "__main__":
 
     if isOnlyGeneratePose:
         # save gt poses
-        outputPosePath = '/home/runqiu/tmptmp/vslam-0/gtpose_timealigned.txt'
+        outputPosePath = '/home/runqiu/tmptmp/eventstereoslam-dataset-1/gtpose_timealigned.txt'
         for indexCamPose, camInWorldTransform in enumerate(camInWorldTransformList):
             print('indexCamPose: {}, new frame pos: {}'.format(indexCamPose, camInWorldTransform[:3, 3]))
             rRotation = R.from_matrix(camInWorldTransform[:3, :3])
