@@ -59,7 +59,7 @@ if __name__ == "__main__":
 
     isOnlyGeneratePose = True
     if isOnlyGeneratePose:
-        with open("/home/runqiu/tmptmp/eventstereoslam-dataset-1/ts.txt", "r") as file:
+        with open("/home/runqiu/tmptmp/vslam-1/ts-blur.txt", "r") as file:
             tsList = file.readlines()
         ts = []
         for line in tsList:
@@ -82,11 +82,17 @@ if __name__ == "__main__":
                 # [1546, 6245],
                 # [6246, 7772]
                 # seq1,
-                [0, 155],
-                [156, 625],
-                [626, 780],
-                [781, 1249],
-                [1250, 1405]
+                # [0, 155],
+                # [156, 625],
+                # [626, 780],
+                # [781, 1249],
+                # [1250, 1405]
+                # seq1, vslam
+                [0, 200],
+                [201, 801],
+                [802, 1002],
+                [1003, 1603],
+                [1604, 1805]
             ])
         )
     else:
@@ -146,7 +152,7 @@ if __name__ == "__main__":
 
     if isOnlyGeneratePose:
         # save gt poses
-        outputPosePath = '/home/runqiu/tmptmp/eventstereoslam-dataset-1/gtpose_timealigned.txt'
+        outputPosePath = '/home/runqiu/tmptmp/vslam-1/gtpose_timealigned.txt'
         for indexCamPose, camInWorldTransform in enumerate(camInWorldTransformList):
             print('indexCamPose: {}, new frame pos: {}'.format(indexCamPose, camInWorldTransform[:3, 3]))
             rRotation = R.from_matrix(camInWorldTransform[:3, :3])
