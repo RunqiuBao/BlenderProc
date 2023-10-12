@@ -175,55 +175,116 @@ class VibrationRollerPathPlanner(object):
             # generate backward move dirs
             backwardDirsList = []
             backwardLocationsList = []
-            firstFunc = [-0.25, 2, -4]
-            dFirstFunc = [-0.5, 2]
-            secondFunc = [0.25, 0, -2]
-            dSecondFunc = [0.5, 0]
+            rr = 4 / numpy.sin(0.48996)
+            def firstfunc(x):
+                return numpy.sqrt(rr**2 - (x-8)**2) - rr
+            def dfirstfunc(x):
+                return 0.5 * 1 / numpy.sqrt(rr**2 - (x-8)**2) * (-2 * x + 16)
+            def secondfunc(x):
+                return -numpy.sqrt(rr**2 - x**2) + rr - 2
+            def dsecondfunc(x):
+                return -0.5 * 1 / numpy.sqrt(rr**2 - x**2) * (-2 * x)
+            def thirdfunc(x):
+                return -numpy.sqrt(rr**2 - (x-8)**2) + rr - 2
+            def dthirdfunc(x):
+                return -1 * dfirstfunc(x)
+            def fourthfunc(x):
+                return numpy.sqrt(rr**2 - x**2) - rr
+            def dfourthfunc(x):
+                return -1 * dsecondfunc(x)
 
+            # first back motions
             for indexStep in range(numStepsBack + 1):
                 x0 = squareHeight - squareHeight / numStepsBack * indexStep
                 if indexStep <= (numStepsBack / 2):
-                    y0 = firstFunc[0] * x0**2 + firstFunc[1] * (x0) + firstFunc[2]
+                    y0 = firstfunc(x0)
                     backwardLocationsList.append(numpy.array([x0, y0, 0]))
-                    k = dFirstFunc[0] * x0 + dFirstFunc[1]
+                    k = dfirstfunc(x0)
                     backwardDir = numpy.array([numpy.cos(numpy.arctan(k)), numpy.sin(numpy.arctan(k)), 0])
                     backwardDirsList.append(backwardDir / numpy.linalg.norm(backwardDir))
                 else:
-                    y0 = secondFunc[0] * x0**2 + secondFunc[1] * (x0) + secondFunc[2]
+                    y0 = secondfunc(x0)
                     backwardLocationsList.append(numpy.array([x0, y0, 0]))
-                    k = dSecondFunc[0] * x0 + dSecondFunc[1]
+                    k = dsecondfunc(x0)
+                    backwardDir = numpy.array([numpy.cos(numpy.arctan(k)), numpy.sin(numpy.arctan(k)), 0])
+                    backwardDirsList.append(backwardDir / numpy.linalg.norm(backwardDir))
+            # second back motions
+            for indexStep in range(numStepsBack + 1):
+                x0 = squareHeight - squareHeight / numStepsBack * indexStep
+                if indexStep <= (numStepsBack / 2):
+                    y0 = thirdfunc(x0)
+                    backwardLocationsList.append(numpy.array([x0, y0, 0]))
+                    k = dthirdfunc(x0)
+                    backwardDir = numpy.array([numpy.cos(numpy.arctan(k)), numpy.sin(numpy.arctan(k)), 0])
+                    backwardDirsList.append(backwardDir / numpy.linalg.norm(backwardDir))
+                else:
+                    y0 = fourthfunc(x0)
+                    backwardLocationsList.append(numpy.array([x0, y0, 0]))
+                    k = dfourthfunc(x0)
                     backwardDir = numpy.array([numpy.cos(numpy.arctan(k)), numpy.sin(numpy.arctan(k)), 0])
                     backwardDirsList.append(backwardDir / numpy.linalg.norm(backwardDir))
 
             randomMagnitude = (random.random() + 1.0) * vibrationMagnitude
-            for indexLane in range(numLane):
-                for indexStepForward in range(numStepForward):
-                    newPose = copy.deepcopy(poseList[-1])
-                    newPose[:3, :3] = poseList[-1][:3, :3]
-                    newPose[:3, 3] += dirForward * moveStep
-                    if vibrationMagnitude > 0:
-                        newPose[2, 3] = randomMagnitude * numpy.sin(sinFuncFactor * countStep)  # Note: z is the height direction.
-                        countStep += 1
-                        if countStep % numStepsHalfVibrationCycle == 0:
-                            randomMagnitude = (random.random() + 1.0) * vibrationMagnitude
-                    poseList.append(newPose)
-                orientationForward = copy.copy(poseList[-1][:3, :3])
-                # backward
-                backStartPose = copy.deepcopy(poseList[-1])
-                for indexBackward in range(numStepsBack + 1):
-                    newPose = copy.deepcopy(backStartPose)
-                    newPose[:3, 3] = numpy.matmul(rotationMatrixHorizontal, backwardLocationsList[indexBackward])
-                    newPose[1, 3] += backStartPose[1, 3]
-                    if vibrationMagnitude > 0:
-                        newPose[2, 3] = randomMagnitude * numpy.sin(sinFuncFactor * countStep)
-                        countStep += 1
-                        if countStep % numStepsHalfVibrationCycle == 0:
-                            randomMagnitude = (random.random() + 1.0) * vibrationMagnitude
-                    newPose[:3, :3] = numpy.matmul(GetRotationMatrixFromTwoVectors(dirForward, backwardDirsList[indexBackward]), orientationForward)  # need rotation matrix from two vector # ? this will break when squareTheta is not 0?
-                    poseList.append(newPose)
+            # first forward
+            for indexStepForward in range(numStepForward):
                 newPose = copy.deepcopy(poseList[-1])
-                newPose[:3, :3] = copy.deepcopy(orientationForward)
-                poseList.append(newPose)  # Note: stop at place for one pose.
+                newPose[:3, :3] = poseList[-1][:3, :3]
+                newPose[:3, 3] += dirForward * moveStep
+                if vibrationMagnitude > 0:
+                    newPose[2, 3] = randomMagnitude * numpy.sin(sinFuncFactor * countStep)  # Note: z is the height direction.
+                    countStep += 1
+                    if countStep % numStepsHalfVibrationCycle == 0:
+                        randomMagnitude = (random.random() + 1.0) * vibrationMagnitude
+                poseList.append(newPose)
+            orientationForward = copy.copy(poseList[-1][:3, :3])
+            # first backward
+            backStartPose = copy.deepcopy(poseList[-1])
+            for indexBackward in range(numStepsBack + 1):
+                newPose = copy.deepcopy(backStartPose)
+                newPose[:3, 3] = numpy.matmul(rotationMatrixHorizontal, backwardLocationsList[indexBackward])
+                newPose[1, 3] += backStartPose[1, 3]
+                if vibrationMagnitude > 0:
+                    newPose[2, 3] = randomMagnitude * numpy.sin(sinFuncFactor * countStep)
+                    countStep += 1
+                    if countStep % numStepsHalfVibrationCycle == 0:
+                        randomMagnitude = (random.random() + 1.0) * vibrationMagnitude
+                newPose[:3, :3] = numpy.matmul(GetRotationMatrixFromTwoVectors(dirForward, backwardDirsList[indexBackward]), orientationForward)  # need rotation matrix from two vector # ? this will break when squareTheta is not 0?
+                poseList.append(newPose)
+            newPose = copy.deepcopy(poseList[-1])
+            newPose[:3, :3] = copy.deepcopy(orientationForward)
+            poseList.append(newPose)  # Note: stop at place for one pose.
+            if vibrationMagnitude > 0:
+                countStep += 1
+            # second forward
+            for indexStepForward in range(numStepForward):
+                newPose = copy.deepcopy(poseList[-1])
+                newPose[:3, :3] = poseList[-1][:3, :3]
+                newPose[:3, 3] += dirForward * moveStep
+                if vibrationMagnitude > 0:
+                    newPose[2, 3] = randomMagnitude * numpy.sin(sinFuncFactor * countStep)  # Note: z is the height direction.
+                    countStep += 1
+                    if countStep % numStepsHalfVibrationCycle == 0:
+                        randomMagnitude = (random.random() + 1.0) * vibrationMagnitude
+                poseList.append(newPose)
+            orientationForward = copy.copy(poseList[-1][:3, :3])
+            # second backward
+            backStartPose = copy.deepcopy(poseList[-1])
+            for indexBackward in range(numStepsBack + 1):
+                newPose = copy.deepcopy(backStartPose)
+                newPose[:3, 3] = numpy.matmul(rotationMatrixHorizontal, backwardLocationsList[indexBackward + numStepsBack + 1])
+                # newPose[1, 3] += backStartPose[1, 3]
+                if vibrationMagnitude > 0:
+                    newPose[2, 3] = randomMagnitude * numpy.sin(sinFuncFactor * countStep)
+                    countStep += 1
+                    if countStep % numStepsHalfVibrationCycle == 0:
+                        randomMagnitude = (random.random() + 1.0) * vibrationMagnitude
+                newPose[:3, :3] = numpy.matmul(GetRotationMatrixFromTwoVectors(dirForward, backwardDirsList[indexBackward + numStepsBack + 1]), orientationForward)  # need rotation matrix from two vector # ? this will break when squareTheta is not 0?
+                poseList.append(newPose)
+            newPose = copy.deepcopy(poseList[-1])
+            newPose[:3, :3] = copy.deepcopy(orientationForward)
+            poseList.append(newPose)  # Note: stop at place for one pose.
+            if vibrationMagnitude > 0:
+                countStep += 1
         return poseList
 
     def GetPoseList(self):
