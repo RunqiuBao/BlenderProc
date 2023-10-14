@@ -57,9 +57,9 @@ if __name__ == "__main__":
     myPathPlanner = VibrationRollerPathPlanner()
     # cameraPoseList = [numpy.eye(4)]  # profile image
 
-    isOnlyGeneratePose = False
+    isOnlyGeneratePose = True
     if isOnlyGeneratePose:
-        with open("/home/runqiu/tmptmp/vslam-1/ts-blur.txt", "r") as file:
+        with open("/home/runqiu/tmptmp/vslam-4/ts-blur.txt", "r") as file:
             tsList = file.readlines()
         ts = []
         for line in tsList:
@@ -68,9 +68,9 @@ if __name__ == "__main__":
             else:
                 ts.append(float(line))
         cameraPoseList = myPathPlanner.InitializeRollerPath(
-            6, 4, 0,
+            4, 8, 0,
             laneWidth=2.0,
-            moveStep=0.005,
+            moveStep=0.01,
             ts=ts,
             timeAnchorsIndicies=numpy.array([
                 # seq2
@@ -88,11 +88,10 @@ if __name__ == "__main__":
                 # [781, 1249],
                 # [1250, 1405]
                 # seq1, vslam
-                [0, 200],
-                [201, 801],
-                [802, 1002],
-                [1003, 1603],
-                [1604, 1805]
+                [0, 399],
+                [400, 800],
+                [801, 1199],
+                [1200, 1600]
             ])
         )
     else:
@@ -100,10 +99,9 @@ if __name__ == "__main__":
             4, 8, 0,
             # 4, 4, 0,
             laneWidth=2.0,
-            moveStep=0.05,
-            # moveStep=0.05,
-            # vibrationMagnitude=0.1,
-            # numStepsHalfVibrationCycle=4
+            moveStep=0.01,
+            vibrationMagnitude=0.02,
+            numStepsHalfVibrationCycle=4
         )
 
     # Set the camera to be in front of the object
@@ -152,7 +150,7 @@ if __name__ == "__main__":
 
     if isOnlyGeneratePose:
         # save gt poses
-        outputPosePath = '/home/runqiu/tmptmp/vslam-1/gtpose_timealigned.txt'
+        outputPosePath = '/home/runqiu/tmptmp/vslam-4/gtpose_timealigned.txt'
         for indexCamPose, camInWorldTransform in enumerate(camInWorldTransformList):
             print('indexCamPose: {}, new frame pos: {}'.format(indexCamPose, camInWorldTransform[:3, 3]))
             rRotation = R.from_matrix(camInWorldTransform[:3, :3])

@@ -75,7 +75,7 @@ class VibrationRollerPathPlanner(object):
         dirForward = dirForward / numpy.linalg.norm(dirForward)
         rotationMatrixHorizontal = Rotation.from_rotvec(math.radians(squareTheta) * numpy.array([0, 0, 1]))
         rotationMatrixHorizontal = rotationMatrixHorizontal.as_matrix()
-        numStepsBack = int(squareHeight / moveStep) * 3  # Note: backward need to be slow. Because it contains rotation.
+        numStepsBack = int(squareHeight / moveStep)  # Note: backward need to be slow. Because it contains rotation.
         numStepsBack = numStepsBack if numStepsBack % 2 == 0 else (numStepsBack + 1)
         startPose = numpy.eye(4)
         startPose[:3, :3] = numpy.array([
@@ -84,6 +84,24 @@ class VibrationRollerPathPlanner(object):
             [0, 0, 1]
         ])
         poseList.append(startPose)
+
+        rr = 4 / numpy.sin(0.48996)
+        def firstfunc(x):
+            return numpy.sqrt(rr**2 - (x-8)**2) - rr
+        def dfirstfunc(x):
+            return 0.5 * 1 / numpy.sqrt(rr**2 - (x-8)**2) * (-2 * x + 16)
+        def secondfunc(x):
+            return -numpy.sqrt(rr**2 - x**2) + rr - 2
+        def dsecondfunc(x):
+            return -0.5 * 1 / numpy.sqrt(rr**2 - x**2) * (-2 * x)
+        def thirdfunc(x):
+            return -numpy.sqrt(rr**2 - (x-8)**2) + rr - 2
+        def dthirdfunc(x):
+            return -1 * dfirstfunc(x)
+        def fourthfunc(x):
+            return numpy.sqrt(rr**2 - x**2) - rr
+        def dfourthfunc(x):
+            return -1 * dsecondfunc(x)
 
         if vibrationMagnitude > 0:
             sinFuncFactor = numpy.pi / numStepsHalfVibrationCycle
@@ -102,21 +120,17 @@ class VibrationRollerPathPlanner(object):
                 for time in range(timeAnchorsIndicies[1, 0] - timeAnchorsIndicies[0, 1] - 1):
                     poseList.append(staticPose)
             # second (backward)
-            firstFunc = [-0.25, 2, -4]
-            dFirstFunc = [-0.5, 2]
-            secondFunc = [0.25, 0, -2]
-            dSecondFunc = [0.5, 0]
             timeSpan = ts[timeAnchorsIndicies[1, 1]] - ts[timeAnchorsIndicies[1, 0]]
             startPose = poseList[-1]
             orientationForward = copy.deepcopy(startPose[:3, :3])
             for indexT in range(timeAnchorsIndicies[1, 0], timeAnchorsIndicies[1, 1] + 1):
                 x0 = squareHeight - squareHeight * (ts[indexT] - ts[timeAnchorsIndicies[1, 0]]) / timeSpan
                 if ts[indexT] <= (ts[timeAnchorsIndicies[1, 0]] + timeSpan / 2):
-                    y0 = firstFunc[0] * x0**2 + firstFunc[1] * (x0) + firstFunc[2]
-                    k = dFirstFunc[0] * x0 + dFirstFunc[1]
+                    y0 = firstfunc(x0)
+                    k = dfirstfunc(x0)
                 else:
-                    y0 = secondFunc[0] * x0**2 + secondFunc[1] * (x0) + secondFunc[2]
-                    k = dSecondFunc[0] * x0 + dSecondFunc[1]
+                    y0 = secondfunc(x0)
+                    k = dsecondfunc(x0)
                 backwardLocation = numpy.array([x0, y0, 0])
                 backwardDir = numpy.array([numpy.cos(numpy.arctan(k)), numpy.sin(numpy.arctan(k)), 0])
                 backwardDir = backwardDir / numpy.linalg.norm(backwardDir)
@@ -145,53 +159,22 @@ class VibrationRollerPathPlanner(object):
             for indexT in range(timeAnchorsIndicies[3, 0], timeAnchorsIndicies[3, 1] + 1):
                 x0 = squareHeight - squareHeight * (ts[indexT] - ts[timeAnchorsIndicies[3, 0]]) / timeSpan
                 if ts[indexT] <= (ts[timeAnchorsIndicies[3, 0]] + timeSpan / 2):
-                    y0 = firstFunc[0] * x0**2 + firstFunc[1] * (x0) + firstFunc[2]
-                    k = dFirstFunc[0] * x0 + dFirstFunc[1]
+                    y0 = thirdfunc(x0)
+                    k = dthirdfunc(x0)
                 else:
-                    y0 = secondFunc[0] * x0**2 + secondFunc[1] * (x0) + secondFunc[2]
-                    k = dSecondFunc[0] * x0 + dSecondFunc[1]
+                    y0 = fourthfunc(x0)
+                    k = dfourthfunc(x0)
                 backwardLocation = numpy.array([x0, y0, 0])
                 backwardDir = numpy.array([numpy.cos(numpy.arctan(k)), numpy.sin(numpy.arctan(k)), 0])
                 backwardDir = backwardDir / numpy.linalg.norm(backwardDir)
                 newPose = numpy.eye(4)
                 newPose[:3, 3] = numpy.matmul(rotationMatrixHorizontal, backwardLocation)
-                newPose[1:3, 3] += startPose[1:3, 3]  # Note: if the lane is biased from 0, need to add the starting value of y.
                 newPose[:3, :3] = numpy.matmul(GetRotationMatrixFromTwoVectors(numpy.array([1, 0, 0]), backwardDir), orientationForward)
-                poseList.append(newPose)
-            # add static poses
-            if timeAnchorsIndicies[4, 0] > timeAnchorsIndicies[3, 1]:
-                staticPose = copy.deepcopy(poseList[-1])
-                for time in range(timeAnchorsIndicies[4, 0] - timeAnchorsIndicies[3, 1] - 1):
-                    poseList.append(staticPose)
-            # fifth lane
-            timeSpan = ts[timeAnchorsIndicies[4, 1]] - ts[timeAnchorsIndicies[4, 0]]
-            startPose = poseList[-1]
-            for indexT in range(timeAnchorsIndicies[4, 0], timeAnchorsIndicies[4, 1] + 1):
-                newPose = copy.deepcopy(startPose)
-                newPose[:3, 3] += dirForward * squareHeight * (ts[indexT] - ts[timeAnchorsIndicies[4, 0]]) / timeSpan
-                newPose[:3, :3] = orientationForward
                 poseList.append(newPose)
         else:
             # generate backward move dirs
             backwardDirsList = []
             backwardLocationsList = []
-            rr = 4 / numpy.sin(0.48996)
-            def firstfunc(x):
-                return numpy.sqrt(rr**2 - (x-8)**2) - rr
-            def dfirstfunc(x):
-                return 0.5 * 1 / numpy.sqrt(rr**2 - (x-8)**2) * (-2 * x + 16)
-            def secondfunc(x):
-                return -numpy.sqrt(rr**2 - x**2) + rr - 2
-            def dsecondfunc(x):
-                return -0.5 * 1 / numpy.sqrt(rr**2 - x**2) * (-2 * x)
-            def thirdfunc(x):
-                return -numpy.sqrt(rr**2 - (x-8)**2) + rr - 2
-            def dthirdfunc(x):
-                return -1 * dfirstfunc(x)
-            def fourthfunc(x):
-                return numpy.sqrt(rr**2 - x**2) - rr
-            def dfourthfunc(x):
-                return -1 * dsecondfunc(x)
 
             # first back motions
             for indexStep in range(numStepsBack + 1):
