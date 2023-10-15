@@ -75,7 +75,7 @@ class VibrationRollerPathPlanner(object):
         dirForward = dirForward / numpy.linalg.norm(dirForward)
         rotationMatrixHorizontal = Rotation.from_rotvec(math.radians(squareTheta) * numpy.array([0, 0, 1]))
         rotationMatrixHorizontal = rotationMatrixHorizontal.as_matrix()
-        numStepsBack = int(squareHeight / moveStep) * 3  # Note: backward need to be slow. Because it contains rotation.
+        numStepsBack = int(squareHeight / moveStep)  # Note: backward need to be slow. Because it contains rotation.
         numStepsBack = numStepsBack if numStepsBack % 2 == 0 else (numStepsBack + 1)
         startPose = numpy.eye(4)
         startPose[:3, :3] = numpy.array([

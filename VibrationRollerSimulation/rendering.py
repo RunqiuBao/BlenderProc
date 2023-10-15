@@ -57,9 +57,9 @@ if __name__ == "__main__":
     myPathPlanner = VibrationRollerPathPlanner()
     # cameraPoseList = [numpy.eye(4)]  # profile image
 
-    isOnlyGeneratePose = True
+    isOnlyGeneratePose = False
     if isOnlyGeneratePose:
-        with open("/home/runqiu/tmptmp/vslam-2/ts-blur.txt", "r") as file:
+        with open("/home/runqiu/tmptmp/vslam-0/ts-blur.txt", "r") as file:
             tsList = file.readlines()
         ts = []
         for line in tsList:
@@ -92,10 +92,9 @@ if __name__ == "__main__":
             4, 4, 0,
             # 4, 4, 0,
             laneWidth=2.0,
-            moveStep=0.01
-            # moveStep=0.005,
-            # vibrationMagnitude=0.1,
-            # numStepsHalfVibrationCycle=4
+            moveStep=0.005,
+            vibrationMagnitude=0.02,
+            numStepsHalfVibrationCycle=4
         )
 
     # Set the camera to be in front of the object
@@ -158,7 +157,7 @@ if __name__ == "__main__":
                     f.write('\n' + onePose)
     else:
         # save to n groups for parallel rendering
-        numProcess = 12
+        numProcess = 4
         numMinPosesInGroup = int(len(camInWorldTransformList) / numProcess)
         listPoseGroup = []
         listPoseGroupIndices = []
