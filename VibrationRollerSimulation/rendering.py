@@ -57,9 +57,9 @@ if __name__ == "__main__":
     myPathPlanner = VibrationRollerPathPlanner()
     # cameraPoseList = [numpy.eye(4)]  # profile image
 
-    isOnlyGeneratePose = False
+    isOnlyGeneratePose = True
     if isOnlyGeneratePose:
-        with open("/home/runqiu/tmptmp/vslam-0/ts-blur.txt", "r") as file:
+        with open("/home/runqiu/tmptmp/blender_dataset/c/ts-blur.txt", "r") as file:
             tsList = file.readlines()
         ts = []
         for line in tsList:
@@ -81,10 +81,14 @@ if __name__ == "__main__":
                 # [0, 1545],
                 # [1546, 6245],
                 # [6246, 7772]
-                # seq2, vslam
-                [0, 401],
-                [402, 1601],
-                [1602, 2003]
+                # # seq2, vslam
+                # [0, 401],
+                # [402, 1601],
+                # [1602, 2003]
+                # seq0, vslam
+                [0, 492],
+                [493, 1973],
+                [1974, 2461]
             ])
         )
     else:
@@ -125,12 +129,19 @@ if __name__ == "__main__":
     workStartInWorldTransform = bproc.math.build_transformation_mat(camTranslationBase, camRotationBase)
     camViewTransform = bproc.math.build_transformation_mat(camTranslationLocal, camRotationLocal)
     camInWorldTransformList = []
+    rotateUp15degTransform = numpy.array([
+        [  0.9659258,  0.0000000,  0.2588190, 0],
+        [  0.0000000,  1.0000000,  0.0000000, 0],
+        [  -0.2588190,  0.0000000,  0.9659258, 0],
+        [ 0, 0, 0, 1]
+    ])
     for cameraInWorkStartTransform in cameraPoseList:
         # camTranslationInWorld = cameraInWorkStartTransform[:3, 3] + workStartInWorldTransform[:3, 3]
         # camRotationInWorld = numpy.matmul(cameraInWorkStartTransform[:3, :3], workStartInWorldTransform[:3, :3])
         # camInWorldTransform = numpy.eye(4)
         # camInWorldTransform[:3, :3] = camRotationInWorld
         # camInWorldTransform[:3, 3] = camTranslationInWorld
+        cameraInWorkStartTransform = numpy.matmul(rotateUp15degTransform, cameraInWorkStartTransform)  # rotate gt traj plane up by 15deg
         camInWorldTransform = numpy.matmul(workStartInWorldTransform, cameraInWorkStartTransform)
         camInWorldTransform = numpy.matmul(camInWorldTransform, camViewTransform)
         camInWorldTransformList.append(camInWorldTransform)
@@ -143,7 +154,7 @@ if __name__ == "__main__":
 
     if isOnlyGeneratePose:
         # save gt poses
-        outputPosePath = '/home/runqiu/tmptmp/vslam-2/gtpose_timealigned.txt'
+        outputPosePath = '/home/runqiu/tmptmp/blender_dataset/c/gtpose_timealigned.txt'
         for indexCamPose, camInWorldTransform in enumerate(camInWorldTransformList):
             print('indexCamPose: {}, new frame pos: {}'.format(indexCamPose, camInWorldTransform[:3, 3]))
             rRotation = R.from_matrix(camInWorldTransform[:3, :3])
