@@ -51,8 +51,8 @@ if __name__ == "__main__":
     # bproc.object.delete_multiple([obj[-1]])  # delete those baloons
     # bproc.object.delete_multiple([obj[-4]])  # delete those baloons
 
-    # bproc.world.set_world_background_hdr_img(bkgPath)
-    bproc.renderer.set_world_background([0, 0, 0])
+    bproc.world.set_world_background_hdr_img(bkgPath)
+    # bproc.renderer.set_world_background([0, 0, 0])
 
     bproc.camera.set_intrinsics_from_K_matrix(K = kk, image_width = 1280, image_height = 720)
     # initialize stereo camera
@@ -61,6 +61,7 @@ if __name__ == "__main__":
     # Note: auto adjusting KK
 
     # Render the data
+    from IPython import embed; print('here!'); embed()
     for indexToIndices, camInWorldTransform in enumerate(poses):
         print('indexCamPose: {}, new frame pos: {}'.format(poseIndices[indexToIndices], camInWorldTransform[:3, 3]))
         rotateDownTransform = numpy.array([
@@ -72,8 +73,8 @@ if __name__ == "__main__":
         camInWorldTransform = numpy.matmul(camInWorldTransform, rotateDownTransform)
         leftImage, rightImage = myStereoCam.RenderOnePose(camInWorldTransform, bproc.renderer)
         starttime = time.time()
-        cv2.imwrite('/home/runqiu/tmptmp/vslam-4/leftcam2/{}.png'.format(str(poseIndices[indexToIndices]).zfill(6)), cv2.cvtColor(leftImage, cv2.COLOR_RGB2BGR))
-        cv2.imwrite('/home/runqiu/tmptmp/vslam-4/rightcam2/{}.png'.format(str(poseIndices[indexToIndices]).zfill(6)), cv2.cvtColor(rightImage, cv2.COLOR_RGB2BGR))
+        cv2.imwrite('/home/runqiu/tmptmp/eventstereoslam-dataset-4/leftimages/{}.png'.format(str(poseIndices[indexToIndices]).zfill(6)), cv2.cvtColor(leftImage, cv2.COLOR_RGB2BGR))
+        cv2.imwrite('/home/runqiu/tmptmp/eventstereoslam-dataset-4/rightimages/{}.png'.format(str(poseIndices[indexToIndices]).zfill(6)), cv2.cvtColor(rightImage, cv2.COLOR_RGB2BGR))
         print("save time cost: {} sec".format(time.time() - starttime))
         bproc.utility.reset_keyframes()
 
