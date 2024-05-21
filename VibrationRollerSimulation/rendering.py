@@ -59,7 +59,7 @@ if __name__ == "__main__":
 
     isOnlyGeneratePose = True
     if isOnlyGeneratePose:
-        with open("/home/runqiu/tmptmp/blender_dataset/c/ts-blur.txt", "r") as file:
+        with open("/home/runqiu/tmptmp/blender_dataset/c_clear/ts-sample2.txt", "r") as file:
             tsList = file.readlines()
         ts = []
         for line in tsList:
@@ -78,17 +78,21 @@ if __name__ == "__main__":
                 # [158, 629],
                 # [631, 787]
                 # seq0
-                # [0, 1545],
-                # [1546, 6245],
-                # [6246, 7772]
+                [0, 1545],
+                [1546, 6245],
+                [6246, 7772]
                 # # seq2, vslam
                 # [0, 401],
                 # [402, 1601],
                 # [1602, 2003]
-                # seq0, vslam
-                [0, 492],
-                [493, 1973],
-                [1974, 2461]
+                # # seq0, vslam
+                # [0, 148],
+                # [149, 595],
+                # [596, 743]
+                # # seq c_clear, vslam
+                # [0, 266],
+                # [267, 1066],
+                # [1067, 1336]
             ])
         )
     else:
@@ -154,7 +158,7 @@ if __name__ == "__main__":
 
     if isOnlyGeneratePose:
         # save gt poses
-        outputPosePath = '/home/runqiu/tmptmp/blender_dataset/c/gtpose_timealigned.txt'
+        outputPosePath = '/home/runqiu/tmptmp/blender_dataset/seq0/gtpose_timealigned.txt'
         for indexCamPose, camInWorldTransform in enumerate(camInWorldTransformList):
             print('indexCamPose: {}, new frame pos: {}'.format(indexCamPose, camInWorldTransform[:3, 3]))
             rRotation = R.from_matrix(camInWorldTransform[:3, :3])
